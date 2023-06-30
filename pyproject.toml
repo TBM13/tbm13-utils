@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tbm13_utils"
+version = "1.0"
+authors = [
+  { name="TBM13", email="mateo.trueba@gmail.com" },
+]
+description = "Utils made for personal use"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/TBM13/tbm13-utils"
+"Bug Tracker" = "https://github.com/TBM13/tbm13-utils/issues"
