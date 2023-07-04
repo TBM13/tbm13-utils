@@ -45,7 +45,7 @@ def get_terminal_width(fallback: int = 50) -> int:
     If we are running in Google Colab, returns `fallback`.
     """
 
-    # Colab doesn't support getting the width of the output box, so we need
+    # Colab doesn't support getting the width of the output box
     if IN_COLAB:
         return fallback
     
