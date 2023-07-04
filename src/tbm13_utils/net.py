@@ -156,14 +156,10 @@ class Host:
             error(f'Host: Invalid URL "{value}"')
             return
 
-        if (scheme := match.group(3)) is not None:
-            self.scheme = scheme
-        if (ip := match.group(5)) is not None:
-            self.ip = ip
-        elif (domain := match.group(6)) is not None:
-            self.domain = domain
-        if (port := match.group(9)) is not None:
-            self.port = port
+        self.scheme = match.group(3)
+        self.ip = match.group(5)
+        self.domain = match.group(6)
+        self.port = match.group(9)
 
     def __str__(self) -> str:
         return self.base_url or ''
