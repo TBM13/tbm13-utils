@@ -1,13 +1,14 @@
 import http.client
 import socket
 import time
+import re
 import requests
 
 from .display import *
 from .flow import *
 __all__ = [
-    'FIDDLER_PROXY', 'proxy', 'request_get',
-    'request_post', 'socket_connection'
+    'FIDDLER_PROXY', 'proxy', 'Host',
+    'request_get','request_post', 'socket_connection'
 ]
 
 FIDDLER_PROXY = { 
@@ -16,6 +17,167 @@ FIDDLER_PROXY = {
 }
 # Set this to fiddler_proxy to make the traffic go through Fiddler
 proxy: dict[str, str]|None = None
+
+# 192.168.0.1
+_IP_PATTERN = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+# 192.168.0.1
+# 192.168.0.1:80
+# https://192.168.0.1
+# http://192.168.1.1:4568/asd/whatever
+# group 1 is the full base URL | group 3 is scheme | group 4 is IP/URL
+# group 5 is IP | group 6 is URL | group 9 is port
+# group 11 is anything after the slash
+_URL_PATTERN = re.compile(
+    r'(^((https?):\/\/)?((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|((\d|\w|\.)+))(\:(\d+))?)(\/(.+)?)?$'
+)
+class Host:
+    _scheme: str = ''
+    _domain: str = ''
+    _ip: str = ''
+    _port: int = -1
+
+    def __init__(self, base_url: str = '') -> None:
+        if len(base_url) > 0:
+            self.base_url = base_url
+
+    @property
+    def scheme(self) -> str | None:
+        """The scheme of the host. If not set, this value is `None`."""
+        if len(self._scheme) == 0:
+            return None
+
+        return self._scheme
+    
+    @scheme.setter
+    def scheme(self, value: str|None):
+        if value is None:
+            self._scheme = ''
+            return
+
+        value = value.lower()
+        if not value in ['http', 'https']:
+            error(f'Host: Invalid scheme "{value}"')
+            return
+
+        self._scheme = value
+
+    @property
+    def ip(self) -> str | None:
+        """The IP address of the host. If not set, this value is `None`."""
+        if len(self._ip) == 0:
+            return None
+
+        return self._ip
+    
+    @ip.setter
+    def ip(self, value: str|None):
+        if value is None:
+            self._ip = ''
+            return
+
+        match = _IP_PATTERN.match(value)
+        if match is None:
+            error(f'Host: Invalid IP "{value}"')
+            return
+
+        self._ip = match.group(0)
+
+    @property
+    def port(self) -> int | None:
+        """The port of the host. If not set, this value is `None`."""
+        if self._port == -1:
+            return None
+
+        return self._port
+    
+    @port.setter
+    def port(self, value: int|str|None):
+        if value is None:
+            self._port = -1
+            return
+
+        if isinstance(value, str):
+            try:
+                value = int(value)
+            except ValueError:
+                error(f'Host: Invalid port "{value}"')
+                return
+
+        if value < 0 or value > 65535:
+            error(f'Host: Invalid port "{value}"')
+            return
+
+        self._port = value
+
+    @property
+    def domain(self) -> str | None:
+        """The domain of the host. Example: `www.google.com`
+        
+        If not set, this value is `None`.
+        """
+        if len(self._domain) == 0:
+            return None
+
+        return self._domain
+
+    @domain.setter
+    def domain(self, value: str|None):
+        if value is None:
+            self._domain = ''
+            return
+
+        self._domain = value
+
+    @property
+    def base_url(self) -> str | None:
+        """The base URL of the host.
+        
+        This value is generated using `scheme`, `domain`/`ip` and `port`
+        if they are available. Otherwise, it'll be `None`.
+
+        When setting this, you can pass any full URL as value.
+        If possible, `scheme`, `domain`/`ip` and `port` will be extracted from it.
+        """
+        if self.domain is None and self.ip is None:
+            return None
+        
+        base = self.domain or self.ip
+        if self.scheme is not None:
+            base = f'{self.scheme}://{base}'
+        if self.port is not None:
+            base += f':{self.port}'
+
+        return base
+    
+    @base_url.setter
+    def base_url(self, value: str):
+        match = _URL_PATTERN.match(value)
+        if match is None or match.group(4) is None:
+            error(f'Host: Invalid URL "{value}"')
+            return
+
+        if (scheme := match.group(3)) is not None:
+            self.scheme = scheme
+        if (ip := match.group(5)) is not None:
+            self.ip = ip
+        elif (domain := match.group(6)) is not None:
+            self.domain = domain
+        if (port := match.group(9)) is not None:
+            self.port = port
+
+    def __str__(self) -> str:
+        return self.base_url or ''
+
+    def __repr__(self) -> str:
+        return (
+            'Host('
+            f'scheme={self.scheme}, '
+            f'ip={self.ip}, '
+            f'domain={self.domain}, '
+            f'port={self.port}, '
+            f'base_url={self.base_url}'
+            ')'
+        )
 
 def _request(url: str, headers, cookies, session, auth,
              allow_redirects: bool, retry_on_connection_error: bool,
