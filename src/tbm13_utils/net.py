@@ -7,7 +7,8 @@ import requests
 from .display import *
 from .flow import *
 __all__ = [
-    'FIDDLER_PROXY', 'proxy', 'Host',
+    'FIDDLER_PROXY', 'proxy', 'IP_PATTERN_STR',
+    'IP_PATTERN', 'URL_PATTERN', 'Host',
     'request_get','request_post', 'socket_connection'
 ]
 
@@ -19,7 +20,8 @@ FIDDLER_PROXY = {
 proxy: dict[str, str]|None = None
 
 # 192.168.0.1
-_IP_PATTERN = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+IP_PATTERN_STR = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+IP_PATTERN = re.compile(f'^{IP_PATTERN_STR}$')
 # 192.168.0.1
 # 192.168.0.1:80
 # https://192.168.0.1
@@ -27,8 +29,8 @@ _IP_PATTERN = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
 # group 1 is the full base URL | group 3 is scheme | group 4 is IP/URL
 # group 5 is IP | group 6 is URL | group 9 is port
 # group 11 is anything after the slash
-_URL_PATTERN = re.compile(
-    r'(^((https?):\/\/)?((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|((\d|\w|\.)+))(\:(\d+))?)(\/(.+)?)?$'
+URL_PATTERN = re.compile(
+    r'(^((https?):\/\/)?((' + IP_PATTERN_STR + r')|((\d|\w|\.)+))(\:(\d+))?)(\/(.+)?)?$'
 )
 class Host:
     _scheme: str = ''
@@ -75,7 +77,7 @@ class Host:
             self._ip = ''
             return
 
-        match = _IP_PATTERN.match(value)
+        match = IP_PATTERN.match(value)
         if match is None:
             error(f'Host: Invalid IP "{value}"')
             return
@@ -151,7 +153,7 @@ class Host:
     
     @base_url.setter
     def base_url(self, value: str):
-        match = _URL_PATTERN.match(value)
+        match = URL_PATTERN.match(value)
         if match is None or match.group(4) is None:
             error(f'Host: Invalid URL "{value}"')
             return
