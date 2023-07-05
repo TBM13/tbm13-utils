@@ -33,12 +33,12 @@ URL_PATTERN = re.compile(
     r'(^((https?):\/\/)?((' + IP_PATTERN_STR + r')|((\d|\w|\.)+))(\:(\d+))?)(\/(.+)?)?$'
 )
 class Host:
-    _scheme: str = ''
-    _domain: str = ''
-    _ip: str = ''
-    _port: int = -1
-
     def __init__(self, base_url: str = '') -> None:
+        self._scheme: int = ''
+        self._domain: str = ''
+        self._ip: str = ''
+        self._port: int = -1
+
         if len(base_url) > 0:
             self.base_url = base_url
 
