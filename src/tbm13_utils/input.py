@@ -145,7 +145,8 @@ def input_file(msg: str, fallback: str|None = None) -> str:
 
 def get_selection(*options, input_msg: str = 'Please select an option',
                   commands: dict[re.Pattern, callable] = {},
-                  print_func: callable = print) -> str:
+                  print_func: callable = print,
+                  invert_print_order: bool = False) -> str:
     """Shows the user a list with all the given options.
        Asks them to select one and returns it.
        
@@ -153,10 +154,17 @@ def get_selection(*options, input_msg: str = 'Please select an option',
        input, and if one of them matches, its function will be executed.
        
        `print_func` can be used to customize the list style by replacing the print
-       function with a custom one."""
+       function with a custom one.
 
-    for i, option in enumerate(options):
-        print_func(f'{i + 1}) {option}')
+       If `invert_print_order` is `True`, the options will be printed in reverse order.
+    """
+
+    if not invert_print_order:
+        for i, option in enumerate(options):
+            print_func(f'{i + 1}) {option}')
+    else:
+        for i, option in reversed(list(enumerate(options))):
+            print_func(f'{i + 1}) {option}')
 
     print()
     while 1:
@@ -186,7 +194,8 @@ def get_selection(*options, input_msg: str = 'Please select an option',
 def conditional_get_selection(options: dict[str, bool],
                               input_msg = 'Please select an option',
                               commands: dict[re.Pattern, callable] = {},
-                              print_func: callable = print) -> str:
+                              print_func: callable = print,
+                              invert_print_order: bool = False) -> str:
     """Shows the user a list with the keys from `options` whose value are `True`. 
        Asks them to select one and returns it.
        
@@ -194,15 +203,19 @@ def conditional_get_selection(options: dict[str, bool],
        input, and if one of them matches, its function will be executed.
 
        `print_func` can be used to customize the list style by replacing the print
-       function with a custom one."""
+       function with a custom one.
+
+       If `invert_print_order` is `True`, the options will be printed in reverse order.
+    """
 
     options = [key for key, value in options.items() if value]
     return get_selection(*options, input_msg=input_msg, commands=commands, 
-                         print_func=print_func)
+                         print_func=print_func, invert_print_order=invert_print_order)
 
 def get_selection_from_table(columns: dict[str, int], options: list[list[str]],
                              input_msg: str = 'Please select an option',
-                             commands: dict[re.Pattern, callable] = {}) -> int:
+                             commands: dict[re.Pattern, callable] = {},
+                             invert_print_order: bool = False) -> int:
     """Just like `get_selection()`, but uses `print_table()` to print the options,
     and returns the index of the selected one."""
 
@@ -216,7 +229,7 @@ def get_selection_from_table(columns: dict[str, int], options: list[list[str]],
         row.insert(0, f'{i + 1})')
         options[i] = row
 
-    print_table(columns, options)
+    print_table(columns, options, invert_print_order=invert_print_order)
     selection = get_selection(*options, print_func=lambda *_: None,
                               input_msg=input_msg, commands=commands)
 

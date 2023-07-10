@@ -145,7 +145,8 @@ def print_title(subtitle: str = '',
     color_print(f'[bold]{style}' + (title + subtitle).center(get_terminal_width()))
     print_separator(separator_char, style)
 
-def print_table(columns: dict[str, int], data: list[list[str]]):
+def print_table(columns: dict[str, int], data: list[list[str]],
+                invert_print_order: bool = False):
     """Prints a table.
     
     `columns`: `Key`: Column name. `Value`: Column length.\n
@@ -154,6 +155,8 @@ def print_table(columns: dict[str, int], data: list[list[str]]):
 
     `data`: a list of lists, where each inner list represents a row of data
     and must have the same length than `columns`.
+
+    If `invert_print_order` is `True`, the table will be printed from bottom to top.
     """
 
     terminal_columns = get_terminal_width()
@@ -189,9 +192,13 @@ def print_table(columns: dict[str, int], data: list[list[str]]):
         header += '{:<{}}'.format(name, length)
     color_print(header)
 
+    if invert_print_order:
+        data.reverse()
+
     # Print data
     for row in data:
         row_str = ''
+
         for i, (name, length) in enumerate(columns.items()):
                 if length == 0:
                     length = dynamic_columns_len
