@@ -3,11 +3,13 @@ import time
 from .display import *
 from .input import *
 __all__ = [
-    'ReturnNoneInterrupt', 'RetryInterrupt', 'call_retriable_func'
+    'ReturnInterrupt', 'RetryInterrupt', 'call_retriable_func'
 ]
 
-class ReturnNoneInterrupt(Exception):
-    pass
+class ReturnInterrupt(Exception):
+    def __init__(self, return_value):
+        self.return_value = return_value
+
 class RetryInterrupt(Exception):
     pass
 
