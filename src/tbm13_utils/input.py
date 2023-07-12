@@ -7,7 +7,8 @@ from .environment import IN_COLAB
 __all__ = [
     'color_input', 'decorator_input', 'info_input', 'info2_input', 'success_input',
     'debug_input', 'warn_input', 'error_input', 'ask', 'input_float', 'input_int',
-    'input_file', 'get_selection', 'conditional_get_selection', 'get_selection_from_table'
+    'input_str', 'input_file', 'get_selection', 'conditional_get_selection',
+    'get_selection_from_table'
 ]
 
 def color_input(text: str) -> str:
@@ -122,6 +123,36 @@ def input_int(msg: str, fallback: int|None = None,
     """
 
     return _input_number(int, msg, fallback, min, max, accepted_values)
+
+def input_str(msg: str, fallback: str|None = None,
+              min_len: int|None = None, max_len: int|None = None) -> str:
+    """Asks the user to input a string. Returns it.
+
+    If `fallback` isn't `None`, it will be returned if the user doesn't input anything.\n
+    If `min_len` isn't `None`, the user won't be allowed to input a shorter string.\n
+    If `max_len` isn't `None`, the user won't be allowed to input a longer string.
+    """
+
+    print()
+    while 1:
+        clear_last_line()
+        value = color_input(msg + ': ')
+        if len(value) == 0:
+            if fallback is not None:
+                return fallback
+
+            continue
+
+        if min_len is not None and len(value) < min_len:
+            info_input(f"Input must have more than {min_len} chars")
+            clear_last_line()
+            continue
+        if max_len is not None and len(value) > max_len:
+            info_input(f"Input must have less than {max_len} chars")
+            clear_last_line()
+            continue
+
+        return value
 
 def input_file(msg: str, fallback: str|None = None) -> str:
     """Asks the user to input a valid path of a file. Returns it.
