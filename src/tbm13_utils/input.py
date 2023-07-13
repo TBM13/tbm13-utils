@@ -66,17 +66,56 @@ def ask(msg: str, yes_default: bool = False) -> bool:
 
     return selection == 'Y'
 
+def input_str(msg: str, fallback = None,
+              min_len: int|None = None, max_len: int|None = None) -> str:
+    """Asks the user to input a string. Returns it.
+
+    If `fallback` isn't `None`, it will be returned as-is if the user doesn't input anything.\n
+    If `min_len` isn't `None`, the user won't be allowed to input a shorter string.\n
+    If `max_len` isn't `None`, the user won't be allowed to input a longer string.
+    """
+
+    msg += ': '
+    print()
+    while 1:
+        clear_last_line()
+        # Print fallback value
+        if fallback is not None:
+            color_print((' ' * len(msg)) + f'[darkgray]{fallback}', end='\r')
+
+        value = color_input(msg)
+        if not IN_COLAB:
+            # If fallback value is larger than the input, the gray
+            # text will still be there so print the whole line again
+            clear_last_line()
+            if len(value) == 0 and fallback is not None:
+                color_print(f'{msg}{fallback}')
+            else:
+                color_print(f'{msg}{value}')
+
+        if len(value) == 0:
+            if fallback is not None:
+                return fallback
+            continue
+        if min_len is not None and len(value) < min_len:
+            info_input(f"Input must have more than {min_len} chars")
+            clear_last_line()
+            continue
+        if max_len is not None and len(value) > max_len:
+            info_input(f"Input must have less than {max_len} chars")
+            clear_last_line()
+            continue
+        return value
+
 def _input_number(type: type, msg: str, fallback = None,
                   min = None, max = None, accepted_values = None):
     print()
     while 1:
         clear_last_line()
-        value = color_input(msg + ': ')
-        if len(value) == 0:
-            if fallback is not None:
-                return fallback
-
-            continue
+        value = input_str(msg, fallback)
+        if value == fallback:
+            # Return fallback as-is. Don't apply checks to it.
+            return fallback
 
         try:
             result = type(value)
@@ -98,12 +137,12 @@ def _input_number(type: type, msg: str, fallback = None,
 
         return result
     
-def input_float(msg: str, fallback: float|None = None,
+def input_float(msg: str, fallback = None,
                 min: float|None = None, max: float|None = None,
                 accepted_values: list[float]|None = None) -> float:
     """Asks the user to input a float. Returns it.
     
-    If `fallback` isn't `None`, it will be returned if the user doesn't input anything.\n
+    If `fallback` isn't `None`, it will be returned as-is if the user doesn't input anything.\n
     If `min` isn't `None`, the user won't be allowed to input a lower number.\n
     If `max` isn't `None`, the user won't be allowed to input a higher number.\n
     If `accepted_values` isn't `None`, the user won't be allowed to input any value not inside it.
@@ -111,12 +150,12 @@ def input_float(msg: str, fallback: float|None = None,
     
     return _input_number(float, msg, fallback, min, max, accepted_values)
 
-def input_int(msg: str, fallback: int|None = None, 
+def input_int(msg: str, fallback = None, 
               min: int|None = None, max: int|None = None,
               accepted_values: list[int]|None = None) -> int:
     """Asks the user to input an integer. Returns it.
 
-    If `fallback` isn't `None`, it will be returned if the user doesn't input anything.\n
+    If `fallback` isn't `None`, it will be returned as-is if the user doesn't input anything.\n
     If `min` isn't `None`, the user won't be allowed to input a lower number.\n
     If `max` isn't `None`, the user won't be allowed to input a higher number.\n
     If `accepted_values` isn't `None`, the user won't be allowed to input any value not inside it.
@@ -124,50 +163,20 @@ def input_int(msg: str, fallback: int|None = None,
 
     return _input_number(int, msg, fallback, min, max, accepted_values)
 
-def input_str(msg: str, fallback: str|None = None,
-              min_len: int|None = None, max_len: int|None = None) -> str:
-    """Asks the user to input a string. Returns it.
-
-    If `fallback` isn't `None`, it will be returned if the user doesn't input anything.\n
-    If `min_len` isn't `None`, the user won't be allowed to input a shorter string.\n
-    If `max_len` isn't `None`, the user won't be allowed to input a longer string.
-    """
-
-    print()
-    while 1:
-        clear_last_line()
-        value = color_input(msg + ': ')
-        if len(value) == 0:
-            if fallback is not None:
-                return fallback
-
-            continue
-
-        if min_len is not None and len(value) < min_len:
-            info_input(f"Input must have more than {min_len} chars")
-            clear_last_line()
-            continue
-        if max_len is not None and len(value) > max_len:
-            info_input(f"Input must have less than {max_len} chars")
-            clear_last_line()
-            continue
-
-        return value
-
 def input_file(msg: str, fallback: str|None = None) -> str:
     """Asks the user to input a valid path of a file. Returns it.
     
-    If `fallback` isn't `None` and user gives no input, returns `fallback`."""
+    If `fallback` isn't `None`, it will be returned if the user
+    doesn't input anything AND `fallback` is a valid file path.
+    """
 
     while 1:
-        file = input(f'{msg}: ')
+        file = input_str(msg, fallback)
         # Strip quotes, this is useful because on Windows the
         # file explorer has an option to copy the path of a folder/file,
         # and it adds quotes to it
         file = file.strip('"')
 
-        if fallback is not None and len(file) == 0:
-            return fallback
         if os.path.isfile(file):
             break
         clear_last_line()
