@@ -65,13 +65,12 @@ def remove_style(text: str) -> str:
         text = text.replace(f'[{key}]', '')
     return text
 
-def color_print(text: str, output=sys.stdout, add_newline: bool = True):
-    """Applies style to `text` and prints it to `output`."""
+def color_print(text: str, output=sys.stdout, end: str = '\n'):
+    """Applies style to `text`, appends `end` (newline by default)
+    and prints it to `output`.
+    """
 
-    text += '[0]'
-    if add_newline:
-        text += '\n'
-
+    text += f'[0]{end}'
     text = apply_style(text)
     output.write(text)
     output.flush()
