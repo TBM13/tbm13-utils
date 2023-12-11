@@ -19,6 +19,9 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Utilities",
 ]
+dependencies = [
+  "requests",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/TBM13/tbm13-utils"
