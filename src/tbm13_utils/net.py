@@ -7,17 +7,9 @@ import requests
 from .display import *
 from .flow import *
 __all__ = [
-    'FIDDLER_PROXY', 'proxy', 'IP_PATTERN_STR',
-    'IP_PATTERN', 'URL_PATTERN', 'Host',
+    'IP_PATTERN_STR', 'IP_PATTERN', 'URL_PATTERN', 'Host',
     'request_get','request_post', 'socket_connection'
 ]
-
-FIDDLER_PROXY = { 
-    'http'  : 'http://127.0.0.1:8888',
-    'https' : 'https://127.0.0.1:8888'
-}
-# Set this to fiddler_proxy to make the traffic go through Fiddler
-proxy: dict[str, str]|None = None
 
 # 192.168.0.1
 IP_PATTERN_STR = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
@@ -189,12 +181,12 @@ def _request(url: str, headers, cookies, session, auth,
         if data is None:
             r: requests.Response = session.get(
                 url, headers=headers, cookies=cookies, auth=auth, 
-                allow_redirects=allow_redirects, timeout=5, proxies=proxy
+                allow_redirects=allow_redirects, timeout=5
             )
         else:
             r: requests.Response = session.post(
                 url, headers=headers, cookies=cookies, auth=auth, 
-                allow_redirects=allow_redirects, timeout=5, proxies=proxy,
+                allow_redirects=allow_redirects, timeout=5,
                 data=data
             )
 
