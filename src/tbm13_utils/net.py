@@ -218,15 +218,16 @@ def request_get(url: str, verbose: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
                 retry_on_unexpected_status_code: bool = False,
-                wait_time_between_retries: float = 0.4,
-                max_retries: int = 10) -> requests.Response | None:
+                wait_between_retries: float = 0.4,
+                max_retries: int = 10, wait_multiplier: float = 1,
+                max_wait: float = -1) -> requests.Response | None:
     """Performs a GET request to `url`, using (if provided) `headers`,
     `cookies`, `session`, `auth` and `allow_redirects`.
     
     If a connection error happens or the response status code isn't
     in `expected_status_codes` (and `retry_on_connection_error` or
     `retry_on_unexpected_status_code` are `True` respectively), retries
-    the request up to `max_retries` times, waiting `wait_time_between_retries`
+    the request up to `max_retries` times, waiting `wait_between_retries`
     (See `call_retriable_func` for more info)
 
     If `verbose` is `True`, prints the URL before performing the request.
@@ -238,7 +239,8 @@ def request_get(url: str, verbose: bool = True,
 
     return call_retriable_func(
         _request, max_retries=max_retries, 
-        wait_between_retries=wait_time_between_retries,
+        wait_between_retries=wait_between_retries,
+        wait_multiplier=wait_multiplier, max_wait=max_wait,
         url=url, headers=headers, cookies=cookies, session=session, auth=auth,
         allow_redirects=allow_redirects,
         retry_on_connection_error=retry_on_connection_error,
@@ -252,15 +254,16 @@ def request_post(url: str, data, verbose: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
                 retry_on_unexpected_status_code: bool = False,
-                wait_time_between_retries: float = 0.4,
-                max_retries: int = 10) -> requests.Response | None:
+                wait_between_retries: float = 0.4,
+                max_retries: int = 10, wait_multiplier: float = 1,
+                max_wait: float = -1) -> requests.Response | None:
     """Performs a POST request to `url`, using (if provided) `headers`,
     `cookies`, `session`, `auth`, `allow_redirects` and `data`.
     
     If a connection error happens or the response status code isn't
     in `expected_status_codes` (and `retry_on_connection_error` or
     `retry_on_unexpected_status_code` are `True` respectively), retries
-    the request up to `max_retries` times, waiting `wait_time_between_retries`
+    the request up to `max_retries` times, waiting `wait_between_retries`
     (See `call_retriable_func` for more info)
 
     If `verbose` is `True`, prints the URL before performing the request.
@@ -272,7 +275,8 @@ def request_post(url: str, data, verbose: bool = True,
 
     return call_retriable_func(
         _request, max_retries=max_retries, 
-        wait_between_retries=wait_time_between_retries, url=url,
+        wait_between_retries=wait_between_retries, url=url,
+        wait_multiplier=wait_multiplier, max_wait=max_wait,
         data=data, headers=headers, cookies=cookies, session=session, auth=auth,
         allow_redirects=allow_redirects,
         retry_on_connection_error=retry_on_connection_error,
