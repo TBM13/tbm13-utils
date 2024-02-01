@@ -14,13 +14,18 @@ class RetryInterrupt(Exception):
     pass
 
 def call_retriable_func(func: callable, max_retries: int = -1, 
-                        wait_time_between_retries: float = 0.2,
+                        wait_between_retries: float = 0.2,
+                        wait_multiplier: float = 1,
+                        max_wait: float = -1,
                         *args, **kwargs):
     """Calls `func` with `args` and `kwargs`, and recalls it whenever
-    it raises `RetryInterrupt` up to `max_retries` times.
-    
-    If `max_retries` is negative, retries it infinitely.\n
-    Between each retry, sleeps `wait_time_between_retries` seconds.
+    it raises `RetryInterrupt` up to `max_retries` times
+    (or infinitely if `max_retries` is negative).
+
+    Between each retry, sleeps `wait_between_retries` seconds
+    and then multiplies it by `wait_multiplier`.\n
+    If `max_wait` isn't negative, `wait_between_retries` will
+    never exceed its value.
     """
     retries_count = 0
 
@@ -38,13 +43,17 @@ def call_retriable_func(func: callable, max_retries: int = -1,
                 retries_count += 1
                 msg = 'Retrying'
 
-                if wait_time_between_retries > 0:
-                    msg += f' in {wait_time_between_retries} seconds'
+                if wait_between_retries > 0:
+                    if max_wait > 0 and wait_between_retries > max_wait:
+                        wait_between_retries = max_wait
+
+                    msg += f' in {wait_between_retries} seconds'
                     if max_retries > 0:
                         msg += f'. {retries_remaining()} retries remaining'
 
                     debug(f'{msg}...')
-                    time.sleep(wait_time_between_retries)
+                    time.sleep(wait_between_retries)
+                    wait_between_retries *= wait_multiplier
                 else:
                     debug(f'{msg}...')
         except KeyboardInterrupt:

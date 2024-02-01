@@ -238,7 +238,7 @@ def request_get(url: str, verbose: bool = True,
 
     return call_retriable_func(
         _request, max_retries=max_retries, 
-        wait_time_between_retries=wait_time_between_retries,
+        wait_between_retries=wait_time_between_retries,
         url=url, headers=headers, cookies=cookies, session=session, auth=auth,
         allow_redirects=allow_redirects,
         retry_on_connection_error=retry_on_connection_error,
@@ -272,7 +272,7 @@ def request_post(url: str, data, verbose: bool = True,
 
     return call_retriable_func(
         _request, max_retries=max_retries, 
-        wait_time_between_retries=wait_time_between_retries, url=url,
+        wait_between_retries=wait_time_between_retries, url=url,
         data=data, headers=headers, cookies=cookies, session=session, auth=auth,
         allow_redirects=allow_redirects,
         retry_on_connection_error=retry_on_connection_error,
