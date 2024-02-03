@@ -57,6 +57,9 @@ def call_retriable_func(func: callable, max_retries: int = -1,
                 else:
                     debug(f'{msg}...')
         except KeyboardInterrupt:
+            # Wait a little in order to prevent EOFError
+            time.sleep(0.1)
+
             # No retries happened so no need to ask anything,
             # as user just wants to abort the execution of func()
             if retries_count == 0:
@@ -68,4 +71,5 @@ def call_retriable_func(func: callable, max_retries: int = -1,
                 if ask(f'{retries_remaining()} retries remaining. Abort?', True):
                     return
             except (KeyboardInterrupt, EOFError):
+                print()
                 return
