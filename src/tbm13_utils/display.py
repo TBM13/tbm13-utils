@@ -8,7 +8,8 @@ __all__ = [
     'title', 'style', 'get_terminal_width', 'apply_style', 'remove_style',
     'color_print', 'move_new_lines', 'decorator_print', 'info', 'info2',
     'success', 'debug', 'warn', 'error', 'clear', 'clear_last_line', 
-    'print_separator', 'print_title', 'print_table', 'decorators'
+    'print_separator', 'print_title', 'print_dict', 'print_table',
+    'decorators'
 ]
 
 title = 'PLACEHOLDER'
@@ -143,6 +144,15 @@ def print_title(subtitle: str = '',
     print_separator(separator_char, style)
     color_print(f'[bold]{style}' + (title + subtitle).center(get_terminal_width()))
     print_separator(separator_char, style)
+
+def print_dict(title: str, dic: dict[str, str],
+               style: str = '[cyan]'):
+    """Prints `title` and each key and value in `dic` with `style`."""
+    color_print(f'{style}[bold][{title}]')
+
+    format = f'{style}   '
+    for key in dic.keys():
+        color_print(f"{format}{key}:[0] {dic[key]}")
 
 def print_table(columns: dict[str, int], data: list[list[str]],
                 invert_print_order: bool = False):
