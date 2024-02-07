@@ -14,7 +14,10 @@ __all__ = [
 
 title = 'PLACEHOLDER'
 style = {
+    # Reset
     '0':            '\033[0m',
+    # Foreground
+    'black':        '\033[30m',
     'red':          '\033[31m',
     'green':        '\033[32m',
     'yellow':       '\033[33m',
@@ -23,7 +26,17 @@ style = {
     'cyan':         '\033[36m',
     'darkgray':     '\033[90m',
     'white':        '\033[97m',
-
+    # Background
+    'bgBlack':     '\033[40m',
+    'bgRed':       '\033[41m',
+    'bgGreen':     '\033[42m',
+    'bgYellow':    '\033[43m',
+    'bgBlue':      '\033[44m',
+    'bgPurple':    '\033[45m',
+    'bgCyan':      '\033[46m',
+    'bgDarkgray':  '\033[100m',
+    'bgWhite':     '\033[107m',
+    # Styles
     'bold':         '\033[1m',
 #   'dim':          '\033[2m', # Doesn't work in Kali Linux
     'italic':       '\033[3m',
