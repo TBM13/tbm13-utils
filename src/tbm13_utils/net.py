@@ -3,6 +3,7 @@ import socket
 import time
 import re
 import requests
+import urllib3.util.url
 
 from .display import *
 from .flow import *
@@ -169,30 +170,57 @@ class Host:
             ')'
         )
 
-def _request(url: str, headers, cookies, session, auth,
+def _request(url: str, raw_url: bool, headers, cookies, session, auth,
              allow_redirects: bool, retry_on_connection_error: bool,
              retry_on_unexpected_status_code: bool, 
              expected_status_codes: list[int],
              data=None) -> requests.Response | None:
+    if session is None:
+        session = requests.Session()
 
-    request_type = 'GET' if data is None else 'POST'
+    # Combine the session's headers and cookies with the ones passed
+    # as args, priorizing these last ones
+    h = session.headers
+    if headers is not None:
+        h.update(headers)
+    headers = h
+
+    c = session.cookies
+    if cookies is not None:
+        c.update(cookies)
+    cookies = c
+
+    method = 'GET' if data is None else 'POST'
+    r = requests.Request(
+        method=method, url=url,
+        headers=headers, cookies=cookies,
+        auth=auth or session.auth,
+        data=data
+    )
+    prep = r.prepare()
+
+    if raw_url:
+        # Set URL after preparing the request to use it as-is
+        # Useful when trying to do things like path traversals
+        prep.url = url
+
+        # Even if we use a prepared request and override its URL,
+        # when sending it the URL is still re-encoded by urllib3, so
+        # we need to temporarily override this
+        o_normalizable_schemes = urllib3.util.url._NORMALIZABLE_SCHEMES
+        urllib3.util.url._NORMALIZABLE_SCHEMES = ()
 
     try:
-        if data is None:
-            r: requests.Response = session.get(
-                url, headers=headers, cookies=cookies, auth=auth, 
-                allow_redirects=allow_redirects, timeout=5
-            )
-        else:
-            r: requests.Response = session.post(
-                url, headers=headers, cookies=cookies, auth=auth, 
-                allow_redirects=allow_redirects, timeout=5,
-                data=data
-            )
+        r = session.send(
+            prep, allow_redirects=allow_redirects, timeout=5
+        )
+
+        if raw_url:
+            urllib3.util.url._NORMALIZABLE_SCHEMES = o_normalizable_schemes
 
         if not r.status_code in expected_status_codes:
             description = http.client.responses.get(r.status_code, 'Unknown')
-            error(f'{request_type}: Unexpected status code {r.status_code} ({description})')
+            error(f'{method}: Unexpected status code {r.status_code} ({description})')
             if retry_on_unexpected_status_code:
                 raise RetryInterrupt
 
@@ -200,20 +228,20 @@ def _request(url: str, headers, cookies, session, auth,
 
         return r
     except requests.exceptions.ConnectionError:
-        error(f'{request_type}: Connection Error. Is the URL "{url}" valid?')
+        error(f'{method}: Connection Error. Is the URL "{url}" valid?')
         if retry_on_connection_error:
             raise RetryInterrupt
     except requests.exceptions.Timeout:
-        error(f'{request_type}: Timeout')
+        error(f'{method}: Timeout')
         if retry_on_connection_error:
             raise RetryInterrupt
     except requests.exceptions.RequestException as e:
-        error(f'{request_type}: Exception: {e}')
+        error(f'{method}: Exception: {e}')
 
     return None
 
-def request_get(url: str, verbose: bool = True, 
-                headers=None, cookies=None, session=requests, auth=None,
+def request_get(url: str, raw_url: bool = False, verbose: bool = True, 
+                headers=None, cookies=None, session=None, auth=None,
                 allow_redirects: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
@@ -224,13 +252,16 @@ def request_get(url: str, verbose: bool = True,
     """Performs a GET request to `url`, using (if provided) `headers`,
     `cookies`, `session`, `auth` and `allow_redirects`.
     
+    if `raw_url` is `True`, the URL will be used as-is. This is useful,
+    for example, for path traversals.
+
+    If `verbose` is `True`, prints the URL before performing the request.
+    
     If a connection error happens or the response status code isn't
     in `expected_status_codes` (and `retry_on_connection_error` or
     `retry_on_unexpected_status_code` are `True` respectively), retries
     the request up to `max_retries` times, waiting `wait_between_retries`
     (See `call_retriable_func` for more info)
-
-    If `verbose` is `True`, prints the URL before performing the request.
 
     If the request is successful, returns its response. Otherwise, returns `None`.
     """
@@ -241,15 +272,17 @@ def request_get(url: str, verbose: bool = True,
         _request, max_retries=max_retries, 
         wait_between_retries=wait_between_retries,
         wait_multiplier=wait_multiplier, max_wait=max_wait,
-        url=url, headers=headers, cookies=cookies, session=session, auth=auth,
+
+        url=url, raw_url=raw_url,
+        headers=headers, cookies=cookies, session=session, auth=auth,
         allow_redirects=allow_redirects,
         retry_on_connection_error=retry_on_connection_error,
         retry_on_unexpected_status_code=retry_on_unexpected_status_code, 
         expected_status_codes=expected_status_codes
     )
 
-def request_post(url: str, data, verbose: bool = True, 
-                headers=None, cookies=None, session=requests, auth=None,
+def request_post(url: str, data, raw_url: bool = False, verbose: bool = True, 
+                headers=None, cookies=None, session=None, auth=None,
                 allow_redirects: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
@@ -260,13 +293,16 @@ def request_post(url: str, data, verbose: bool = True,
     """Performs a POST request to `url`, using (if provided) `headers`,
     `cookies`, `session`, `auth`, `allow_redirects` and `data`.
     
+    if `raw_url` is `True`, the URL will be used as-is. This is useful,
+    for example, for path traversals.
+
+    If `verbose` is `True`, prints the URL before performing the request.
+    
     If a connection error happens or the response status code isn't
     in `expected_status_codes` (and `retry_on_connection_error` or
     `retry_on_unexpected_status_code` are `True` respectively), retries
     the request up to `max_retries` times, waiting `wait_between_retries`
     (See `call_retriable_func` for more info)
-
-    If `verbose` is `True`, prints the URL before performing the request.
 
     If the request is successful, returns its response. Otherwise, returns `None`.
     """
@@ -275,8 +311,10 @@ def request_post(url: str, data, verbose: bool = True,
 
     return call_retriable_func(
         _request, max_retries=max_retries, 
-        wait_between_retries=wait_between_retries, url=url,
+        wait_between_retries=wait_between_retries,
         wait_multiplier=wait_multiplier, max_wait=max_wait,
+        
+        url=url, raw_url=raw_url,
         data=data, headers=headers, cookies=cookies, session=session, auth=auth,
         allow_redirects=allow_redirects,
         retry_on_connection_error=retry_on_connection_error,
