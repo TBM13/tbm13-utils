@@ -53,6 +53,9 @@ decorators = {
     'error':   '[bold][red][!][0][red] '
 }
 
+##########################################################
+# Terminal Info
+##########################################################
 def get_terminal_width(fallback: int = 50) -> int:
     """Returns the width (columns) of the terminal.
     
@@ -65,6 +68,9 @@ def get_terminal_width(fallback: int = 50) -> int:
     
     return os.get_terminal_size().columns
 
+##########################################################
+# Text Modifications
+##########################################################
 def apply_style(text: str) -> str:
     """Applies style to `text` and returns it."""
 
@@ -79,24 +85,49 @@ def remove_style(text: str) -> str:
         text = text.replace(f'[{key}]', '')
     return text
 
-def color_print(text: str, output=sys.stdout, end: str = '\n'):
-    """Applies style to `text`, appends `end` (newline by default)
-    and prints it to `output`.
-    """
-
-    text += f'[0]{end}'
-    text = apply_style(text)
-    output.write(text)
-    output.flush()
-
 def move_new_lines(src: str, dst: str) -> tuple[str, str]:
-    """Moves all newlines at the beginning of `src` to `dst`."""
+    """Moves all newlines at the beginning of `src` to `dst`
+    and returns both strings.
+    """
 
     while src.startswith('\n'):
         src = src[1:]
         dst = '\n' + dst
     
     return (src, dst)
+
+##########################################################
+# Printing
+##########################################################
+def clear():
+    """Executes clear (Linux) or cls (Windows)."""
+
+    if IN_COLAB:
+        return
+
+    if OS == 'Windows': 
+        subprocess.run('cls', shell=True)
+    else: 
+        subprocess.run('clear', shell=True)
+
+def clear_last_line():
+    """Clears the last line in the console, overwriting it."""
+
+    if IN_COLAB:
+        return
+
+    whitespace = ' ' * get_terminal_width()
+    print(f'\033[A{whitespace}\033[A')
+
+def color_print(text: str, output=sys.stdout, end: str = '\n'):
+    """Applies style to `text`, appends `end` (newline by default)
+    and writes it to `output`.
+    """
+
+    text += f'[0]{end}'
+    text = apply_style(text)
+    output.write(text)
+    output.flush()
 
 def decorator_print(decorator: str, text: str):
     """Prints `text` adding `decorator` at the beginning."""
@@ -116,28 +147,6 @@ def warn(text: str):
     decorator_print(decorators['warn'], text)
 def error(text: str):
     decorator_print(decorators['error'], text)
-
-def clear():
-    """Executes clear (Linux) or cls (Windows)."""
-
-    # clear() doesn't work in Colab
-    if IN_COLAB:
-        return
-
-    if OS == 'Windows': 
-        subprocess.run('cls', shell=True)
-    else: 
-        subprocess.run('clear', shell=True)
-
-def clear_last_line():
-    """Clears the last line in the console, overwriting it."""
-
-    # This doesn't work in Colab
-    if IN_COLAB:
-        return
-
-    whitespace = ' ' * get_terminal_width()
-    print(f'\033[A{whitespace}\033[A')
 
 def print_separator(char: str, style: str = ''):
     """Prints `char` until it fills the terminal horizontally."""
