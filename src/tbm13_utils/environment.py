@@ -4,6 +4,8 @@ import shutil
 import subprocess
 import time
 
+from typing import Callable
+
 __all__ = [
     'IN_COLAB', 'OS', 'tool_exists', 'get_unique_file', 'run_and_print_output'
 ]
@@ -52,7 +54,8 @@ def get_unique_file(file_path: str) -> str:
     
     return unique_path
 
-def run_and_print_output(print_func: callable, *args, **kwargs):
+def run_and_print_output(print_func: Callable[[str], None],
+                         *args, **kwargs):
     """Calls `subprocess.Popen` with `args` and `kwargs`.
     
     Pipes both stdout and stderr, and every time the process writes

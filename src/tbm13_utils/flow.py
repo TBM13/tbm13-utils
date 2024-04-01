@@ -1,5 +1,6 @@
 import time
 
+from typing import Callable
 from .display import *
 from .input import *
 __all__ = [
@@ -13,7 +14,7 @@ class ReturnInterrupt(Exception):
 class RetryInterrupt(Exception):
     pass
 
-def call_retriable_func(func: callable, max_retries: int = -1, 
+def call_retriable_func(func: Callable, max_retries: int = -1, 
                         wait_between_retries: float = 0.2,
                         wait_multiplier: float = 1,
                         max_wait: float = -1,
