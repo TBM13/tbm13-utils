@@ -12,7 +12,7 @@ __all__ = [
     'decorators'
 ]
 
-title = 'PLACEHOLDER'
+title = ''
 style = {
     # Reset
     '0':            '\033[0m',
@@ -156,16 +156,18 @@ def print_separator(char: str, style: str = ''):
     color_print(style + separator.center(width))
 
 def print_title(subtitle: str = '',
-                separator_char: str = '=', style: str = '[cyan]'):
-    """Prints `TITLE` and `subtitle` between two separators."""
+                separator: str = '=', style: str = '[cyan]'):
+    """Calls `clear` then prints global var `title` (if not empty)
+    and `subtitle` between two separators.
+    """
 
     clear()
-    if len(subtitle) > 0:
+    if len(title) > 0 and len(subtitle) > 0:
         subtitle = ' | ' + subtitle
 
-    print_separator(separator_char, style)
+    print_separator(separator, style)
     color_print(f'[bold]{style}' + (title + subtitle).center(get_terminal_width()))
-    print_separator(separator_char, style)
+    print_separator(separator, style)
 
 def print_dict(title: str, dic: dict[str, str],
                style: str = '[cyan]'):
