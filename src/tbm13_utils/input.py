@@ -2,6 +2,7 @@ import copy
 import os
 import re
 
+from typing import Callable
 from .display import *
 from .environment import IN_COLAB
 __all__ = [
@@ -11,6 +12,9 @@ __all__ = [
     'get_selection_from_table'
 ]
 
+##########################################################
+# Simple Input
+##########################################################
 def color_input(text: str) -> str:
     """Applies style to `text` and calls input()."""
 
@@ -26,8 +30,9 @@ def color_input(text: str) -> str:
 
 def decorator_input(decorator: str, text: str, 
                     end_text: str = '[0] [darkgray][Enter][0]') -> str:
-    """Adds `decorator` at the beggining of `text` and 
-    `end_text` at the end, then calls input()."""
+    """Prepends `decorator` and appends `end_text` to `text`, 
+    then calls `color_input` and returns it.
+    """
 
     text, decorator = move_new_lines(text, decorator)
     return color_input(decorator + text + end_text)
@@ -45,6 +50,9 @@ def warn_input(text: str) -> str:
 def error_input(text: str) -> str:
     return decorator_input(decorators['error'], text)
 
+##########################################################
+# Advanced Input
+##########################################################
 def ask(msg: str, yes_default: bool = False) -> bool:
     """Asks the user to input Yes or No (Y/N). Returns `True` if the answer is Yes.
     
@@ -183,15 +191,18 @@ def input_file(msg: str, fallback: str|None = None) -> str:
 
     return file
 
+##########################################################
+# Selections
+##########################################################
 def get_selection(*options, input_msg: str = 'Please select an option',
-                  commands: dict[re.Pattern, callable] = {},
-                  print_func: callable = print,
+                  commands: dict[re.Pattern, Callable[[re.Match], None]] = {},
+                  print_func: Callable[[str], None] = print,
                   invert_print_order: bool = False) -> str:
     """Shows the user a list with all the given options.
        Asks them to select one and returns it.
        
        If `commands` is supplied, all of its patterns will be tested against the user
-       input, and if one of them matches, its function will be executed.
+       input and, if one of them matches, its function will be executed.
        
        `print_func` can be used to customize the list style by replacing the print
        function with a custom one.
@@ -254,7 +265,7 @@ def conditional_get_selection(options: dict[str, bool],
 
 def get_selection_from_table(columns: dict[str, int], options: list[list[str]],
                              input_msg: str = 'Please select an option',
-                             commands: dict[re.Pattern, callable] = {},
+                             commands: dict[re.Pattern, Callable[[re.Match], None]] = {},
                              invert_print_order: bool = False) -> int:
     """Just like `get_selection()`, but uses `print_table()` to print the options,
     and returns the index of the selected one."""
