@@ -1,5 +1,4 @@
 import os
-import platform
 import shutil
 import subprocess
 import time
@@ -10,7 +9,6 @@ __all__ = [
     'IN_COLAB', 'tool_exists', 'get_unique_file', 'run_as_root', 'run_and_print_output'
 ]
 
-OS = platform.system()
 # Check if we are being executed on Google Colab
 try:
     import google.colab

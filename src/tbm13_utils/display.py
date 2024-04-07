@@ -1,5 +1,6 @@
 import math
 import os
+import platform
 import subprocess
 import sys
 
@@ -105,7 +106,7 @@ def clear():
     if IN_COLAB:
         return
 
-    if OS == 'Windows': 
+    if platform.system() == 'Windows': 
         subprocess.run(['cls'])
     else: 
         subprocess.run(['clear'])
