@@ -7,7 +7,7 @@ import time
 from typing import Callable
 
 __all__ = [
-    'IN_COLAB', 'OS', 'tool_exists', 'get_unique_file', 'run_and_print_output'
+    'IN_COLAB', 'tool_exists', 'get_unique_file', 'run_as_root', 'run_and_print_output'
 ]
 
 OS = platform.system()
@@ -53,6 +53,17 @@ def get_unique_file(file_path: str) -> str:
         i += 1
     
     return unique_path
+
+def run_as_root(args, **kwargs) -> subprocess.CompletedProcess:
+    """Calls `subprocess.run` with `args` and `kwargs`.
+    
+    If the current user is not root, prepend the command with `sudo`.
+    """
+
+    if os.geteuid() != 0:
+        args = ['sudo'] + list(args)
+
+    return subprocess.run(args, **kwargs)
 
 def run_and_print_output(print_func: Callable[[str], None],
                          *args, **kwargs):
