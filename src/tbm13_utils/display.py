@@ -106,9 +106,9 @@ def clear():
         return
 
     if OS == 'Windows': 
-        subprocess.run('cls', shell=True)
+        subprocess.run(['cls'])
     else: 
-        subprocess.run('clear', shell=True)
+        subprocess.run(['clear'])
 
 def clear_last_line():
     """Clears the last line in the console, overwriting it."""
