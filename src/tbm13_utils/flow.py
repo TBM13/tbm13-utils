@@ -4,8 +4,13 @@ from typing import Callable
 from .display import *
 from .input import *
 __all__ = [
-    'ReturnInterrupt', 'RetryInterrupt', 'call_retriable_func'
+    'AbortInterrupt', 'ReturnInterrupt', 'RetryInterrupt', 'call_retriable_func'
 ]
+
+class AbortInterrupt(Exception):
+    def __init__(self, msg: str, details: str = ''):
+        self.msg = msg
+        self.details = details
 
 class ReturnInterrupt(Exception):
     def __init__(self, return_value):
