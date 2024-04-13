@@ -107,7 +107,7 @@ def clear():
         return
 
     if platform.system() == 'Windows': 
-        subprocess.run(['cls'])
+        subprocess.run(['cls'], shell=True)
     else: 
         subprocess.run(['clear'])
 
