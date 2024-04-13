@@ -77,9 +77,12 @@ def run_and_print_output(print_func: Callable[[str], None],
 
     try:
         proc = subprocess.Popen(*args, **kwargs)
-        while proc.poll() is None:
+        while 1:
             line = proc.stdout.readline()
             if not line: 
+                if proc.poll() is not None:
+                    break
+
                 proc.wait()
                 continue
 
