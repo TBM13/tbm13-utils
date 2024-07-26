@@ -1,4 +1,4 @@
-# Convenience file to import all at once
+# Convenience file to import everything at once
 from .display import *
 from .encoding import *
 from .environment import *
