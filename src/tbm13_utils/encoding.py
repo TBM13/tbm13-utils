@@ -6,12 +6,12 @@ from typing import Any, Union
 from .display import *
 
 __all__ = [
-    'JsonSerializable',
+    'Serializable',
     'base64_decode', 'base64_encode',
     'url_decode', 'url_encode'
 ]
 
-class JsonSerializable:
+class Serializable:
     """Base class for objects that can be serialized to JSON.
     
     Implements `__eq__` and `__repr__`.
@@ -39,7 +39,7 @@ class JsonSerializable:
         
         Override this method to customize how and which values
         are deserialized from JSON, specially nested objects
-        with `JsonSerializable` instances inside.
+        with `Serializable` instances inside.
         """
         obj = cls._create_empty()
 
@@ -48,7 +48,7 @@ class JsonSerializable:
                 continue
 
             v = obj.__dict__.get(key)
-            if isinstance(v, JsonSerializable):
+            if isinstance(v, Serializable):
                 value = v.from_dict(value)
             elif isinstance(v, set):
                 value = set(value)
@@ -86,7 +86,7 @@ class JsonSerializable:
         contains non-default values.
         """
         def serialize(o):
-            if isinstance(o, JsonSerializable):
+            if isinstance(o, Serializable):
                 return o.to_dict()
             elif isinstance(o, set):
                 return list(o)
@@ -95,11 +95,11 @@ class JsonSerializable:
 
         return json.dumps(self, default=serialize)
     
-    def update(self, other: 'JsonSerializable', ignore_list: set[str] = set()):
+    def update(self, other: 'Serializable', ignore_list: set[str] = set()):
         """Updates the object with the non-default values of `other`.
         
         Variables in this object will have their value replaced by those
-        in `other.to_dict()`. `JsonSerializable`, `dict` and `set`
+        in `other.to_dict()`. `Serializable`, `dict` and `set`
         variables will be merged instead of replaced.
         """
         for key, other_val in other.to_dict().items():
@@ -108,8 +108,8 @@ class JsonSerializable:
 
             if other_val != self.__get_empty_dict().get(key):
                 val = getattr(self, key)
-                if (isinstance(val, JsonSerializable) and
-                    isinstance(other_val, JsonSerializable)):
+                if (isinstance(val, Serializable) and
+                    isinstance(other_val, Serializable)):
                     val.update(other_val)
                 elif isinstance(val, dict) and isinstance(other_val, dict):
                     val.update(other_val)
@@ -122,7 +122,7 @@ class JsonSerializable:
                            value_style: str = '[0]') -> dict[str, str]:
         """Returns a dict with the values of this object that should be printed.
         Keys are the name of the variables and values a printable string or a
-        `JsonSerializable` object.
+        `Serializable` object.
 
         Override this function to customize `self.print()`.
         """
@@ -138,7 +138,7 @@ class JsonSerializable:
 
         return dic
 
-    def print(self, other: Union['JsonSerializable', None] = None,
+    def print(self, other: Union['Serializable', None] = None,
                spaces: int = 0):
         lines = self._to_printable_dict(spaces)
         if other is not None:
@@ -158,19 +158,19 @@ class JsonSerializable:
                 other_line = other_lines.get(var_name, '<Deleted>')
             
             if other is None or value == other_value:
-                if isinstance(value, JsonSerializable):
+                if isinstance(value, Serializable):
                     value.print(spaces=spaces + 2)
                 else:
                     color_print(line)
                 continue
 
-            if isinstance(value, JsonSerializable):
-                if isinstance(other_value, JsonSerializable):
+            if isinstance(value, Serializable):
+                if isinstance(other_value, Serializable):
                     value.print(other_value, spaces + 2)
                 else:
                     value.print(spaces=spaces + 2)
                     color_print(' ' * spaces + f'  [invert]-> {other_line}')
-            elif isinstance(other_value, JsonSerializable):
+            elif isinstance(other_value, Serializable):
                 color_print(f'{line} [invert]-> ')
                 other_value.print(spaces=spaces + 4)
 
@@ -248,7 +248,7 @@ class JsonSerializable:
                 printed_header = True
 
             other_value = getattr(other, var_name, None)
-            if isinstance(other_value, JsonSerializable):
+            if isinstance(other_value, Serializable):
                 other_value.print(spaces=spaces)
             else:
                 color_print(line)
