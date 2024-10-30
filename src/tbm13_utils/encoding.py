@@ -121,8 +121,7 @@ class Serializable:
     def _to_printable_dict(self, spaces: int, key_style: str|None = '[cyan]',
                            value_style: str = '[0]') -> dict[str, str]:
         """Returns a dict with the values of this object that should be printed.
-        Keys are the name of the variables and values a printable string or a
-        `Serializable` object.
+        Keys are the name of the variables and values a printable string.
 
         Override this function to customize `self.print()`.
         """
@@ -140,6 +139,12 @@ class Serializable:
 
     def print(self, other: Union['Serializable', None] = None,
                spaces: int = 0):
+        """Prints the non-default values of this object with color and style.
+        
+        If `other` isn't `None`, the differences between this object's values
+        and `other`'s will also be printed.
+        """
+
         lines = self._to_printable_dict(spaces)
         if other is not None:
             other_lines = other._to_printable_dict(
