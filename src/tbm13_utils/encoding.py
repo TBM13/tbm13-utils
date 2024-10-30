@@ -85,6 +85,29 @@ class JsonSerializable:
 
         return json.dumps(self, default=serialize)
     
+    def update(self, other: 'JsonSerializable', ignore_list: set[str] = set()):
+        """Updates the object with the non-default values of `other`.
+        
+        Variables in this object will have their value replaced by those
+        in `other.to_dict()`. `JsonSerializable`, `dict` and `set`
+        variables will be merged instead of replaced.
+        """
+        for key, other_val in other.to_dict().items():
+            if key in ignore_list:
+                continue
+
+            if other_val != self.__get_empty_dict().get(key):
+                val = getattr(self, key)
+                if (isinstance(val, JsonSerializable) and
+                    isinstance(other_val, JsonSerializable)):
+                    val.update(other_val)
+                elif isinstance(val, dict) and isinstance(other_val, dict):
+                    val.update(other_val)
+                elif isinstance(val, set) and isinstance(other_val, set):
+                    val.update(other_val)
+                else:
+                    setattr(self, key, other_val)
+
     def __eq__(self, value):
         if not isinstance(value, self.__class__):
             return False
