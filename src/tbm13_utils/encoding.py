@@ -44,6 +44,8 @@ class JsonSerializable:
             v = obj.__dict__.get(key)
             if isinstance(v, JsonSerializable):
                 value = v.from_dict(value)
+            elif isinstance(v, set):
+                value = set(value)
 
             setattr(obj, key, value)
         
@@ -80,6 +82,8 @@ class JsonSerializable:
         def serialize(o):
             if isinstance(o, JsonSerializable):
                 return o.to_dict()
+            elif isinstance(o, set):
+                return list(o)
 
             return str(o)
 
