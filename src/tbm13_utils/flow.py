@@ -1,4 +1,5 @@
 import time
+import traceback
 
 from typing import Callable, Any
 from .display import *
@@ -21,7 +22,8 @@ class AbortInterrupt(Exception):
             else:
                 debug(repr(self.details))
 
-        error_input(f'Abort: {self.msg}')
+        fun_name = traceback.extract_tb(self.__traceback__)[-1].name
+        error_input(f'Abort[darkgray]({fun_name})[red]: {self.msg}')
 
 class ReturnInterrupt(Exception):
     def __init__(self, return_value):
