@@ -196,7 +196,7 @@ def input_file(msg: str, fallback: str|None = None) -> str:
 ##########################################################
 def get_selection(*options, input_msg: str = 'Please select an option',
                   commands: dict[re.Pattern, Callable[[re.Match], None]] = {},
-                  print_func: Callable[[str], None] = print,
+                  print_func: Callable[[str], None] = color_print,
                   invert_print_order: bool = False) -> str:
     """Shows the user a list with all the given options.
        Asks them to select one and returns it.
