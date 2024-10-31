@@ -245,7 +245,7 @@ def get_selection(*options, input_msg: str = 'Please select an option',
 def conditional_get_selection(options: dict[str, bool],
                               input_msg = 'Please select an option',
                               commands: dict[re.Pattern, callable] = {},
-                              print_func: callable = print,
+                              print_func: callable = color_print,
                               invert_print_order: bool = False) -> str:
     """Shows the user a list with the keys from `options` whose value are `True`. 
        Asks them to select one and returns it.
