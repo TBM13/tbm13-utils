@@ -1,6 +1,6 @@
 import time
 
-from typing import Callable
+from typing import Callable, Any
 from .display import *
 from .input import *
 __all__ = [
@@ -8,9 +8,20 @@ __all__ = [
 ]
 
 class AbortInterrupt(Exception):
-    def __init__(self, msg: str, details: str = ''):
+    def __init__(self, msg: str, details: Any|None = None):
         self.msg = msg
         self.details = details
+
+    def print(self):
+        print()
+        if self.details is not None:
+            details = repr(self.details)
+            if len(details) <= 60:
+                self.msg += f': [darkgray]{details}'
+            else:
+                debug(repr(self.details))
+
+        error_input(f'Abort: {self.msg}')
 
 class ReturnInterrupt(Exception):
     def __init__(self, return_value):
