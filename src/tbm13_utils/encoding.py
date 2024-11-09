@@ -50,6 +50,8 @@ class Serializable:
             v = obj.__dict__.get(key)
             if isinstance(v, Serializable):
                 value = v.from_dict(value)
+            elif isinstance(v, tuple):
+                value = tuple(value)
             elif isinstance(v, set):
                 value = set(value)
 
@@ -222,12 +224,19 @@ class Serializable:
 
                 color_print(line[:-2] + '}')
 
-            elif isinstance(value, list) and isinstance(other_value, list):
+            elif ((isinstance(value, list) and isinstance(other_value, list))
+                  or (isinstance(value, tuple) and isinstance(other_value, tuple))):
+                open = '['
+                close = ']'
+                if isinstance(value, tuple):
+                    open = '('
+                    close = ')'
+
                 if len(other_value) == 0:
-                    color_print(f'{line} [invert]-> []')
+                    color_print(f'{line} [invert]-> {open}{close}')
                     continue
 
-                line = f'{line} [invert]->[0] ['
+                line = f'{line} [invert]->[0] {open}'
                 for i, val in enumerate(other_value):
                     if i >= len(value) or value[i] != val:
                         line += '[invert]'
@@ -238,7 +247,7 @@ class Serializable:
                 if dif > 0:
                     line += f'[invert]<{dif} deleted>[0], '
 
-                color_print(line[:-2] + ']')
+                color_print(line[:-2] + close)
 
             else:
                 color_print(f'{line} [invert]-> {other_line}')
@@ -258,7 +267,7 @@ class Serializable:
 
             other_value = getattr(other, var_name, None)
             if isinstance(other_value, Serializable):
-                other_value.print(spaces=spaces)
+                other_value.print(spaces=spaces + 2)
             else:
                 color_print(line)
 
