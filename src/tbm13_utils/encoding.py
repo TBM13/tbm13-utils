@@ -95,7 +95,11 @@ class Serializable:
 
         return json.dumps(self, default=serialize)
     
-    def update(self, other: 'Serializable', ignore_list: set[str] = set()):
+    def clone(self) -> 'Serializable':
+        """Returns a new instance created from `self.to_json()`"""
+        return self.from_json(self.to_json())
+
+    def update(self, other: 'Serializable', ignore_list: set[str] = set()) -> 'Serializable':
         """Updates the object with the non-default values of `other`.
         
         Variables in this object will have their value replaced by those
