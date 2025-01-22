@@ -4,6 +4,7 @@ import platform
 import subprocess
 import sys
 
+from typing import MutableSequence, Iterable
 from .environment import *
 __all__ = [
     'title', 'style', 'get_terminal_width', 'apply_style', 'remove_style',
@@ -179,7 +180,8 @@ def print_dict(title: str, dic: dict[str, str],
     for key in dic.keys():
         color_print(f"{format}{key}:[0] {dic[key]}")
 
-def print_table(columns: dict[str, int], data: list[list[str]],
+def print_table(columns: dict[str, int],
+                data: MutableSequence[Iterable[str]],
                 invert_print_order: bool = False):
     """Prints a table.
     
