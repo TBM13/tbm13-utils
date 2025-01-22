@@ -7,6 +7,7 @@ import urllib3.util.url
 
 from .display import *
 from .flow import *
+from .encoding import *
 __all__ = [
     'IP_PATTERN_STR', 'IP_PATTERN', 'URL_PATTERN', 'Host',
     'request_get','request_post', 'socket_connection'
@@ -25,7 +26,7 @@ IP_PATTERN = re.compile(f'^{IP_PATTERN_STR}$')
 URL_PATTERN = re.compile(
     r'(^((https?):\/\/)?((' + IP_PATTERN_STR + r')|((\d|\w|\.)+))(\:(\d+))?)(\/(.+)?)?$'
 )
-class Host:
+class Host(Serializable):
     def __init__(self, base_url: str = '') -> None:
         self._scheme: int = ''
         self._domain: str = ''
@@ -155,6 +156,12 @@ class Host:
         self.ip = match.group(5)
         self.domain = match.group(6)
         self.port = match.group(9)
+
+    def __eq__(self, value):
+        if not isinstance(value, Host):
+            return False
+
+        return self.base_url == value.base_url
 
     def __str__(self) -> str:
         return self.base_url or ''
