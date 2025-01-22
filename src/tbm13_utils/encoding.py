@@ -1,12 +1,15 @@
 import base64
+import filelock
 import json
+import os
 import urllib.parse
 
 from typing import Any, Union
 from .display import *
+from .flow import *
 
 __all__ = [
-    'Serializable',
+    'Serializable', 'SerializableFile',
     'base64_decode', 'base64_encode',
     'url_decode', 'url_encode'
 ]
@@ -279,6 +282,76 @@ class Serializable:
     
     def __repr__(self):
         return f'{self.__class__.__name__}({self.to_dict()})'
+
+class SerializableFile:
+    """Class to manage a file that contains `Serializable` objects.
+    
+    The file is locked with `filelock` while reading/writing to avoid race conditions.
+    """
+
+    def __init__(self, path: str):
+        self.path = path
+        self._lock = filelock.FileLock(path + '.lock')
+
+    def _modify_line(self, line: str, new_line: str|None):
+        with self._lock:
+            with open(self.path, 'r+', encoding='utf8') as file:
+                found = False
+
+                lines = file.readlines()
+                for i, l in enumerate(lines):
+                    if l.strip() == line:
+                        if new_line is not None:
+                            lines[i] = new_line + '\n'
+                        else:
+                            lines.pop(i)
+
+                        found = True
+                        break
+
+                if not found:
+                    raise AbortInterrupt('Line not found', line)
+
+                # Ensure last line doesn't have a newline
+                lines[-1] = lines[-1].strip()
+                file.seek(0)
+                file.truncate(0)
+                file.writelines(lines)
+
+    def delete(self, obj: Serializable):
+        """Deletes the object from the file."""
+        self._modify_line(obj.to_json(), None)
+
+    def replace(self, old_obj: Serializable, new_obj: Serializable):
+        """Replaces `old_obj` with `new_obj` in the file."""
+        self._modify_line(old_obj.to_json(), new_obj.to_json())
+
+    def add(self, obj: Serializable):
+        """Adds the object to the file."""
+        with self._lock:
+            with open(self.path, 'a', encoding='utf8') as file:
+                file.write('\n' + obj.to_json())
+
+    def read_lines(self) -> list[str]:
+        """Returns a list with all non-empty and non-commented lines.
+        
+        Creates the file if needed.
+        """
+        with self._lock:
+            if not os.path.isfile(self.path):
+                warn(f'"{self.path}" didn\'t exist, so we created it')
+                open(self.path, 'w').close()
+
+            lines = []
+            with open(self.path, 'r', encoding='utf8') as file:
+                for line in file.readlines():
+                    line = line.strip()
+                    if len(line) == 0 or line.startswith('#'):
+                        continue
+
+                    lines.append(line)
+
+        return lines
 
 def base64_decode(s: str) -> str:
     """Decodes a Base64-encoded string."""
