@@ -171,22 +171,29 @@ def input_int(msg: str, fallback = None,
 
     return _input_number(int, msg, fallback, min, max, accepted_values)
 
-def input_file(msg: str, fallback: str|None = None) -> str:
+def input_file(msg: str, fallback: str|None = ...) -> str:
     """Asks the user to input a valid path of a file. Returns it.
     
-    If `fallback` isn't `None`, it will be returned if the user
+    If `fallback` is a string, it'll be returned when the user
     doesn't input anything AND `fallback` is a valid file path.
+
+    If `fallback` is `None`, `None` will be returned when the user
+    doesn't input anything.
     """
 
     while 1:
         file = input_str(msg, fallback)
-        # Strip quotes, this is useful because on Windows the
-        # file explorer has an option to copy the path of a folder/file,
-        # and it adds quotes to it
-        file = file.strip('"')
+        if file is None:
+            return None
 
-        if os.path.isfile(file):
-            break
+        if file is not Ellipsis:
+            # Strip quotes, this is useful because on Windows the
+            # file explorer has an option to copy the path of a
+            # folder/file, and it adds quotes to it
+            file = file.strip('"')
+            if os.path.isfile(file):
+                break
+
         clear_last_line()
 
     return file
@@ -197,9 +204,13 @@ def input_file(msg: str, fallback: str|None = None) -> str:
 def get_selection(*options, input_msg: str = 'Please select an option',
                   commands: dict[re.Pattern, Callable[[re.Match], None]] = {},
                   print_func: Callable[[str], None] = color_print,
-                  invert_print_order: bool = False) -> str:
+                  invert_print_order: bool = False,
+                  return_index: bool = False) -> str:
     """Shows the user a list with all the given options.
        Asks them to select one and returns it.
+
+       If `return_index` is `True`, the index of the selected option
+       will be returned instead of the option itself.
        
        If `commands` is supplied, all of its patterns will be tested against the user
        input and, if one of them matches, its function will be executed.
@@ -239,6 +250,9 @@ def get_selection(*options, input_msg: str = 'Please select an option',
             continue
             
         break
+
+    if return_index:
+        return selection - 1
 
     return options[selection - 1]
 
