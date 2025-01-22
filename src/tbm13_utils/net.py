@@ -178,13 +178,14 @@ class Host(Serializable):
         )
 
 def _request(url: str, raw_url: bool, headers, cookies, session, auth,
-             allow_redirects: bool, retry_on_connection_error: bool,
+             allow_redirects: bool, verify: bool,
+             retry_on_connection_error: bool,
              retry_on_unexpected_status_code: bool, 
              expected_status_codes: list[int],
-             data=None) -> requests.Response | None:
+             data=None,
+             timeout: int = 5) -> requests.Response | None:
     if session is None:
         session = requests.Session()
-
     # Combine the session's headers and cookies with the ones passed
     # as args, priorizing these last ones
     h = session.headers
@@ -219,7 +220,8 @@ def _request(url: str, raw_url: bool, headers, cookies, session, auth,
 
     try:
         r = session.send(
-            prep, allow_redirects=allow_redirects, timeout=5
+            prep, allow_redirects=allow_redirects,
+            verify=verify, timeout=timeout
         )
 
         if raw_url:
@@ -249,7 +251,7 @@ def _request(url: str, raw_url: bool, headers, cookies, session, auth,
 
 def request_get(url: str, raw_url: bool = False, verbose: bool = True, 
                 headers=None, cookies=None, session=None, auth=None,
-                allow_redirects: bool = True,
+                allow_redirects: bool = True, verify: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
                 retry_on_unexpected_status_code: bool = False,
@@ -262,8 +264,10 @@ def request_get(url: str, raw_url: bool = False, verbose: bool = True,
     if `raw_url` is `True`, the URL will be used as-is. This is useful,
     for example, for path traversals.
 
+    If `verify` is `False`, the SSL certificates won't be verified.
+
     If `verbose` is `True`, prints the URL before performing the request.
-    
+
     If a connection error happens or the response status code isn't
     in `expected_status_codes` (and `retry_on_connection_error` or
     `retry_on_unexpected_status_code` are `True` respectively), retries
@@ -282,7 +286,7 @@ def request_get(url: str, raw_url: bool = False, verbose: bool = True,
 
         url=url, raw_url=raw_url,
         headers=headers, cookies=cookies, session=session, auth=auth,
-        allow_redirects=allow_redirects,
+        allow_redirects=allow_redirects, verify=verify,
         retry_on_connection_error=retry_on_connection_error,
         retry_on_unexpected_status_code=retry_on_unexpected_status_code, 
         expected_status_codes=expected_status_codes
@@ -290,7 +294,7 @@ def request_get(url: str, raw_url: bool = False, verbose: bool = True,
 
 def request_post(url: str, data, raw_url: bool = False, verbose: bool = True, 
                 headers=None, cookies=None, session=None, auth=None,
-                allow_redirects: bool = True,
+                allow_redirects: bool = True, verify: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
                 retry_on_unexpected_status_code: bool = False,
@@ -302,6 +306,8 @@ def request_post(url: str, data, raw_url: bool = False, verbose: bool = True,
     
     if `raw_url` is `True`, the URL will be used as-is. This is useful,
     for example, for path traversals.
+
+    If `verify` is `False`, the SSL certificates won't be verified.
 
     If `verbose` is `True`, prints the URL before performing the request.
     
@@ -323,7 +329,7 @@ def request_post(url: str, data, raw_url: bool = False, verbose: bool = True,
         
         url=url, raw_url=raw_url,
         data=data, headers=headers, cookies=cookies, session=session, auth=auth,
-        allow_redirects=allow_redirects,
+        allow_redirects=allow_redirects, verify=verify,
         retry_on_connection_error=retry_on_connection_error,
         retry_on_unexpected_status_code=retry_on_unexpected_status_code, 
         expected_status_codes=expected_status_codes
