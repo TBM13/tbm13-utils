@@ -348,8 +348,11 @@ class SerializableFile:
 
             self._last_modification = os.path.getmtime(self.path)
 
-    def _write(self):
-        """Overwrites the file with the current dictionary's values."""
+    def write(self):
+        """Overwrites the file with the current dictionary's values.
+        
+        Call this if you modified the dictionary's items manually.
+        """
         with self._lock:
             with open(self.path, 'w', encoding='utf8') as file:
                 for obj in self._dic.values():
@@ -368,7 +371,20 @@ class SerializableFile:
     def __getitem__(self, key: Any) -> Serializable|list[Serializable]:
         self._read()
         return self._dic[key]
-    
+
+    def get(self, key: Any, default: Serializable) -> Serializable|list[Serializable]:
+        """Returns the value of `key`.
+        
+        If `key` isn't found, returns `default`.
+
+        Remember to call `write` if you modify the values directly.
+        """
+        self._read()
+        if not key in self._dic:
+            return default
+
+        return self._dic[key]
+
     def __setitem__(self, key: Any, value: Serializable):
         if self._allow_duplicate_keys:
             raise AbortInterrupt(
@@ -382,10 +398,12 @@ class SerializableFile:
         with self._lock:
             self._read()
             self._dic[key] = value
-            self._write()
+            self.write()
 
     def add(self, value: Serializable):
-        """Adds `value` to the dictionary, if not already present."""
+        """Adds a cloned `value` to the dictionary, if not already present."""
+        value = value.clone()
+
         with self._lock:
             self._read()
             key = getattr(value, self._key_name)
@@ -402,13 +420,15 @@ class SerializableFile:
 
                 self._dic[key] = value
 
-            self._write()
+            self.write()
 
     def replace(self, old: Serializable, new: Serializable):
-        """Replaces `old` with `new` in the dictionary.
+        """Replaces `old` with a cloned `new` in the dictionary.
         
         If `old` isn't found, raises `AbortInterrupt`.
         """
+        new = new.clone()
+
         with self._lock:
             self._read()
             key = getattr(old, self._key_name)
@@ -426,7 +446,7 @@ class SerializableFile:
                 for i, obj in enumerate(self._dic[key]):
                     if obj == old:
                         self._dic[key][i] = new
-                        self._write()
+                        self.write()
                         found = True
                         break
 
@@ -439,7 +459,7 @@ class SerializableFile:
                     raise AbortInterrupt('SerializableFile: Value mismatch', old)
 
                 self._dic[key] = new
-                self._write()
+                self.write()
 
     def remove_key(self, key: Any):
         """Removes `key` from the dictionary.
@@ -458,7 +478,7 @@ class SerializableFile:
                 raise AbortInterrupt('SerializableFile: Key not found', key)
 
             self._dic.pop(key)
-            self._write()
+            self.write()
 
     def remove_value(self, value: Serializable):
         """Removes `value` from the dictionary.
@@ -480,7 +500,7 @@ class SerializableFile:
                         if len(self._dic[key]) == 0:
                             self._dic.pop(key)
 
-                        self._write()
+                        self.write()
                         found = True
                         break
 
@@ -493,7 +513,7 @@ class SerializableFile:
                     raise AbortInterrupt('SerializableFile: Value mismatch', value)
 
                 self._dic.pop(key)
-                self._write()
+                self.write()
 
     def contains_key(self, key: Any) -> bool:
         """Returns `True` if `key` is in the dictionary."""
@@ -508,6 +528,34 @@ class SerializableFile:
             return key in self._dic and value in self._dic[key]
 
         return key in self._dic and self._dic[key] == value
+    
+    def items(self):
+        """Returns the dictionary's `items()`.
+        
+        Remember to call `write` if you modify the items directly.
+        """
+        self._read()
+        return self._dic.items()
+    
+    def keys(self):
+        """Returns the dictionary's `keys()`.
+        
+        Remember to call `write` if you modify the keys directly.
+        """
+        self._read()
+        return self._dic.keys()
+    
+    def values(self):
+        """Returns the dictionary's `values()`.
+        
+        Remember to call `write` if you modify the values directly.
+        """
+        self._read()
+        return self._dic.values()
+    
+    def __len__(self) -> int:
+        self._read()
+        return len(self._dic)
 
 def base64_decode(s: str) -> str:
     """Decodes a Base64-encoded string."""
