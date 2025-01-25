@@ -4,7 +4,7 @@ import json
 import os
 import urllib.parse
 
-from typing import Any, Union
+from typing import Any, Union, Type
 from .display import *
 from .flow import *
 
@@ -284,74 +284,230 @@ class Serializable:
         return f'{self.__class__.__name__}({self.to_dict()})'
 
 class SerializableFile:
-    """Class to manage a file that contains `Serializable` objects.
+    """A dictionary-like object that contains `Serializable` objects as values.
+
+    It's directly tied to a json file, and each modification updates it.
+    Empty lines or comments (lines that start with '#') are ignored.
     
     The file is locked with `filelock` while reading/writing to avoid race conditions.
+    On every read & write the file and dict is reloaded if it was modified by another process.
     """
+    def __init__(self, path: str, type: Type[Serializable], key_name: str,
+                 allow_duplicate_keys: bool = False):
+        """`type` is the `Serializable` subclass that this object will contain.
 
-    def __init__(self, path: str):
+        `key_name` is the name of a variable in `type` that will be used as the dictionary's key.
+
+        If `allow_duplicate_keys` is `True`, duplicate keys will be allowed and the values of
+        the dictionary will be a `list[Serializable]` with all the objects with the same respective key.
+        """
         self.path = path
+        self.type = type
+        self._key_name: str = key_name
+        self._allow_duplicate_keys = allow_duplicate_keys
+
+        if not key_name in type._create_empty().__dict__:
+            raise AbortInterrupt('SerializableFile: Key name not found', key_name)
+        
+        self._dic: dict[Any, Serializable] = None
+        self._last_modification: float = None
         self._lock = filelock.FileLock(path + '.lock')
 
-    def _modify_line(self, line: str, new_line: str|None):
+        self._read()
+
+    def _read(self):
+        """If needed, clears the dictionary and loads the objects from the file."""
+
         with self._lock:
-            with open(self.path, 'r+', encoding='utf8') as file:
-                found = False
+            if self._dic is not None and self._last_modification == os.path.getmtime(self.path):
+                return
 
-                lines = file.readlines()
-                for i, l in enumerate(lines):
-                    if l.strip() == line:
-                        if new_line is not None:
-                            lines[i] = new_line + '\n'
-                        else:
-                            lines.pop(i)
-
-                        found = True
-                        break
-
-                if not found:
-                    raise AbortInterrupt('Line not found', line)
-
-                # Ensure last line doesn't have a newline
-                lines[-1] = lines[-1].strip()
-                file.seek(0)
-                file.truncate(0)
-                file.writelines(lines)
-
-    def delete(self, obj: Serializable):
-        """Deletes the object from the file."""
-        self._modify_line(obj.to_json(), None)
-
-    def replace(self, old_obj: Serializable, new_obj: Serializable):
-        """Replaces `old_obj` with `new_obj` in the file."""
-        self._modify_line(old_obj.to_json(), new_obj.to_json())
-
-    def add(self, obj: Serializable):
-        """Adds the object to the file."""
-        with self._lock:
-            with open(self.path, 'a', encoding='utf8') as file:
-                file.write('\n' + obj.to_json())
-
-    def read_lines(self) -> list[str]:
-        """Returns a list with all non-empty and non-commented lines.
-        
-        Creates the file if needed.
-        """
-        with self._lock:
+            self._dic = {}
+            # Create file if it doesn't exist
             if not os.path.isfile(self.path):
-                warn(f'"{self.path}" didn\'t exist, so we created it')
                 open(self.path, 'w').close()
-
-            lines = []
+                self._last_modification = os.path.getmtime(self.path)
+                return
+            
+            # Load `Serializable` objects from file
             with open(self.path, 'r', encoding='utf8') as file:
                 for line in file.readlines():
                     line = line.strip()
                     if len(line) == 0 or line.startswith('#'):
                         continue
 
-                    lines.append(line)
+                    obj = self.type.from_json(line)
+                    key = getattr(obj, self._key_name)
+                    if not self._allow_duplicate_keys:
+                        if key in self._dic:
+                            raise AbortInterrupt('SerializableFile: Duplicate key', key)
 
-        return lines
+                        self._dic[key] = obj
+                    else:
+                        self._dic.setdefault(key, []).append(obj)
+
+            self._last_modification = os.path.getmtime(self.path)
+
+    def _write(self):
+        """Overwrites the file with the current dictionary's values."""
+        with self._lock:
+            with open(self.path, 'w', encoding='utf8') as file:
+                for obj in self._dic.values():
+                    if self._allow_duplicate_keys:
+                        for o in obj:
+                            file.write(o.to_json() + '\n')
+                    else:
+                        file.write(obj.to_json() + '\n')
+
+                # remove last newline & everything after
+                file.seek(file.tell() - 1)
+                file.truncate()
+
+            self._last_modification = os.path.getmtime(self.path)
+
+    def __getitem__(self, key: Any) -> Serializable|list[Serializable]:
+        self._read()
+        return self._dic[key]
+    
+    def __setitem__(self, key: Any, value: Serializable):
+        if self._allow_duplicate_keys:
+            raise AbortInterrupt(
+                'SerializableFile: Cannot set items directly when duplicate keys'
+                'are allowed. Use `add`/`replace` instead.'
+            )
+
+        if key != getattr(value, self._key_name):
+            raise AbortInterrupt(f'SerializableFile: Key mismatch', key)
+
+        with self._lock:
+            self._read()
+            self._dic[key] = value
+            self._write()
+
+    def add(self, value: Serializable):
+        """Adds `value` to the dictionary, if not already present."""
+        with self._lock:
+            self._read()
+            key = getattr(value, self._key_name)
+
+            if self._allow_duplicate_keys:
+                self._dic.setdefault(key, [])
+                if value in self._dic[key]:
+                    raise AbortInterrupt('SerializableFile: Duplicate value', value)
+                
+                self._dic[key].append(value)
+            else:
+                if key in self._dic:
+                    raise AbortInterrupt('SerializableFile: Duplicate key', key)
+
+                self._dic[key] = value
+
+            self._write()
+
+    def replace(self, old: Serializable, new: Serializable):
+        """Replaces `old` with `new` in the dictionary.
+        
+        If `old` isn't found, raises `AbortInterrupt`.
+        """
+        with self._lock:
+            self._read()
+            key = getattr(old, self._key_name)
+            new_key = getattr(new, self._key_name)
+            if key != new_key:
+                raise AbortInterrupt(
+                    'SerializableFile: Replacing with different keys isn\'t supported', key
+                )
+
+            if self._allow_duplicate_keys:
+                if not key in self._dic:
+                    raise AbortInterrupt('SerializableFile: Key not found', key)
+
+                found = False
+                for i, obj in enumerate(self._dic[key]):
+                    if obj == old:
+                        self._dic[key][i] = new
+                        self._write()
+                        found = True
+                        break
+
+                if not found:
+                    raise AbortInterrupt('SerializableFile: Value not found', old)
+            else:
+                if not key in self._dic:
+                    raise AbortInterrupt('SerializableFile: Key not found', key)
+                if self._dic[key] != old:
+                    raise AbortInterrupt('SerializableFile: Value mismatch', old)
+
+                self._dic[key] = new
+                self._write()
+
+    def remove_key(self, key: Any):
+        """Removes `key` from the dictionary.
+        
+        Can only be used when `allow_duplicate_keys` is `False`.
+        """
+        if self._allow_duplicate_keys:
+            raise AbortInterrupt(
+                'SerializableFile: Cannot remove key directly when duplicate keys are allowed.'
+                ' Use `remove_value` instead.'
+            )
+
+        with self._lock:
+            self._read()
+            if not key in self._dic:
+                raise AbortInterrupt('SerializableFile: Key not found', key)
+
+            self._dic.pop(key)
+            self._write()
+
+    def remove_value(self, value: Serializable):
+        """Removes `value` from the dictionary.
+        
+        If `value` isn't found, raises `AbortInterrupt`.
+        """
+        with self._lock:
+            self._read()
+            key = getattr(value, self._key_name)
+
+            if self._allow_duplicate_keys:
+                if not key in self._dic:
+                    raise AbortInterrupt('SerializableFile: Key not found', key)
+
+                found = False
+                for i, obj in enumerate(self._dic[key]):
+                    if obj == value:
+                        self._dic[key].pop(i)
+                        if len(self._dic[key]) == 0:
+                            self._dic.pop(key)
+
+                        self._write()
+                        found = True
+                        break
+
+                if not found:
+                    raise AbortInterrupt('SerializableFile: Value not found', value)
+            else:
+                if not key in self._dic:
+                    raise AbortInterrupt('SerializableFile: Key not found', key)
+                if self._dic[key] != value:
+                    raise AbortInterrupt('SerializableFile: Value mismatch', value)
+
+                self._dic.pop(key)
+                self._write()
+
+    def contains_key(self, key: Any) -> bool:
+        """Returns `True` if `key` is in the dictionary."""
+        self._read()
+        return key in self._dic
+    
+    def contains_value(self, value: Serializable) -> bool:
+        """Returns `True` if `value` is in the dictionary."""
+        self._read()
+        key = getattr(value, self._key_name)
+        if self._allow_duplicate_keys:
+            return key in self._dic and value in self._dic[key]
+
+        return key in self._dic and self._dic[key] == value
 
 def base64_decode(s: str) -> str:
     """Decodes a Base64-encoded string."""
