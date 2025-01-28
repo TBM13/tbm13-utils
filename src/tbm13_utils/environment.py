@@ -75,7 +75,7 @@ def popen_as_root(args, **kwargs) -> subprocess.Popen:
 
 def run_and_print_output(print_func: Callable[[str], None],
                          args, root: bool = False,
-                         **kwargs):
+                         **kwargs) -> subprocess.Popen:
     """Calls `subprocess.Popen` or `popen_as_root` if `root`
     is `True`, with `args` and `kwargs`.
     
@@ -92,6 +92,7 @@ def run_and_print_output(print_func: Callable[[str], None],
             proc = popen_as_root(args, **kwargs)
         else:
             proc = subprocess.Popen(args, **kwargs)
+
         while 1:
             line = proc.stdout.readline()
             if not line: 
@@ -102,6 +103,8 @@ def run_and_print_output(print_func: Callable[[str], None],
                 continue
 
             print_func(line)
+
+        return proc
     except KeyboardInterrupt:
         # Wait a little in order to prevent EOFError
         # when user presses CTRL + C
