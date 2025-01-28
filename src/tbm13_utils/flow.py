@@ -13,7 +13,7 @@ class AbortInterrupt(Exception):
         self.msg = msg
         self.details = details
 
-    def print(self):
+    def print(self, block: bool = True):
         print()
         if self.details is not None:
             details = repr(self.details)
@@ -23,7 +23,11 @@ class AbortInterrupt(Exception):
                 debug(repr(self.details))
 
         fun_name = traceback.extract_tb(self.__traceback__)[-1].name
-        error_input(f'Abort[darkgray]({fun_name})[red]: {self.msg}')
+        msg = f'Abort[darkgray]({fun_name})[red]: {self.msg}'
+        if block:
+            error_input(msg)
+        else:
+            error(msg)
 
 class ReturnInterrupt(Exception):
     def __init__(self, return_value):
