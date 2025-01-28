@@ -88,7 +88,7 @@ def input_str(msg: str, fallback = None,
     while 1:
         clear_last_line()
         # Print fallback value
-        if fallback is not None:
+        if fallback is not None and fallback is not Ellipsis:
             color_print((' ' * len(msg)) + f'[darkgray]{fallback}', end='\r')
 
         value = color_input(msg)
