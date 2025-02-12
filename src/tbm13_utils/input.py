@@ -54,9 +54,10 @@ def error_input(text: str) -> str:
 def exception_input(exception: Exception, block: bool = True):
     print()
 
+    tb = traceback.extract_tb(exception.__traceback__)[-1]
     args = ''
     msg = exception.__class__.__name__
-    details = ''
+    details = tb.line
     if len(exception.args) > 0:
         args = exception.args[0]
 
@@ -69,6 +70,7 @@ def exception_input(exception: Exception, block: bool = True):
     elif isinstance(args, str):
         if len(args) > 0:
             msg = args
+            details = ''
     else:
         details = repr(args)
 
@@ -78,7 +80,6 @@ def exception_input(exception: Exception, block: bool = True):
         else:
             debug(repr(details))
 
-    tb = traceback.extract_tb(exception.__traceback__)[-1]
     filename = os.path.basename(tb.filename)
     msg = f'Abort[darkgray]({tb.name}@{filename}:{tb.lineno})[red]: {msg}'
     if block:
