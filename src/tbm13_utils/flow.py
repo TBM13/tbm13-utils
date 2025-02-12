@@ -1,33 +1,11 @@
 import time
-import traceback
 
-from typing import Callable, Any
+from typing import Callable
 from .display import *
 from .input import *
 __all__ = [
-    'AbortInterrupt', 'ReturnInterrupt', 'RetryInterrupt', 'call_retriable_func'
+    'ReturnInterrupt', 'RetryInterrupt', 'call_retriable_func'
 ]
-
-class AbortInterrupt(Exception):
-    def __init__(self, msg: str, details: Any|None = None):
-        self.msg = msg
-        self.details = details
-
-    def print(self, block: bool = True):
-        print()
-        if self.details is not None:
-            details = repr(self.details)
-            if len(details) <= 60:
-                self.msg += f': [darkgray]{details}'
-            else:
-                debug(repr(self.details))
-
-        fun_name = traceback.extract_tb(self.__traceback__)[-1].name
-        msg = f'Abort[darkgray]({fun_name})[red]: {self.msg}'
-        if block:
-            error_input(msg)
-        else:
-            error(msg)
 
 class ReturnInterrupt(Exception):
     def __init__(self, return_value):
