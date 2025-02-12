@@ -1,12 +1,11 @@
 import os
-import shutil
 import subprocess
 import time
 
 from typing import Callable
 
 __all__ = [
-    'IN_COLAB', 'tool_exists', 'get_unique_file',
+    'IN_COLAB', 'get_unique_file',
     'run_as_root', 'popen_as_root', 'run_and_print_output'
 ]
 
@@ -16,18 +15,6 @@ try:
     IN_COLAB = True
 except ImportError:
     IN_COLAB = False
-
-_tool_exists_cache = {}
-def tool_exists(name: str) -> bool:
-    """Check whether `name` is on PATH and marked as executable."""
-
-    # Using a cache improves performance
-    if _tool_exists_cache.get(name) is not None:
-        return _tool_exists_cache[name]
-
-    result = shutil.which(name) is not None
-    _tool_exists_cache[name] = result
-    return result
 
 def get_unique_file(file_path: str) -> str:
     """Generates an unique file name for `file_path` and returns it.
