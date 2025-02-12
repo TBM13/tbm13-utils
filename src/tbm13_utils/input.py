@@ -1,15 +1,16 @@
 import copy
 import os
 import re
+import traceback
 
 from typing import Callable
 from .display import *
 from .environment import IN_COLAB
 __all__ = [
     'color_input', 'decorator_input', 'info_input', 'info2_input', 'success_input',
-    'debug_input', 'warn_input', 'error_input', 'ask', 'input_float', 'input_int',
-    'input_str', 'input_file', 'get_selection', 'conditional_get_selection',
-    'get_selection_from_table'
+    'debug_input', 'warn_input', 'error_input', 'exception_input',
+    'ask', 'input_float', 'input_int', 'input_str', 'input_file',
+    'get_selection', 'conditional_get_selection', 'get_selection_from_table'
 ]
 
 ##########################################################
@@ -49,6 +50,41 @@ def warn_input(text: str) -> str:
     return decorator_input(decorators['warn'], text)
 def error_input(text: str) -> str:
     return decorator_input(decorators['error'], text)
+
+def exception_input(exception: Exception, block: bool = True):
+    print()
+
+    args = ''
+    msg = exception.__class__.__name__
+    details = ''
+    if len(exception.args) > 0:
+        args = exception.args[0]
+
+    if isinstance(args, tuple):
+        if isinstance(args[0], str):
+            msg = args[0]
+            details = ','.join(repr(arg) for arg in args[1:])
+        else:
+            details = ','.join(repr(arg) for arg in args)
+    elif isinstance(args, str):
+        if len(args) > 0:
+            msg = args
+    else:
+        details = repr(args)
+
+    if len(details) > 0:
+        if len(details) <= 60:
+            msg += f': [darkgray]{details}'
+        else:
+            debug(repr(details))
+
+    tb = traceback.extract_tb(exception.__traceback__)[-1]
+    filename = os.path.basename(tb.filename)
+    msg = f'Abort[darkgray]({tb.name}@{filename}:{tb.lineno})[red]: {msg}'
+    if block:
+        error_input(msg)
+    else:
+        error(msg)
 
 ##########################################################
 # Advanced Input
