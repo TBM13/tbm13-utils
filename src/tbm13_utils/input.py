@@ -9,7 +9,8 @@ from .environment import IN_COLAB
 __all__ = [
     'color_input', 'decorator_input', 'info_input', 'info2_input', 'success_input',
     'debug_input', 'warn_input', 'error_input', 'exception_input',
-    'ask', 'input_float', 'input_int', 'input_str', 'input_file',
+    'ask', 'input_str', 'input_strs', 'input_float', 'input_floats',
+    'input_int', 'input_ints', 'input_file',
     'get_selection', 'conditional_get_selection', 'get_selection_from_table'
 ]
 
@@ -119,7 +120,6 @@ def input_str(msg: str, fallback = None,
     If `min_len` isn't `None`, the user won't be allowed to input a shorter string.\n
     If `max_len` isn't `None`, the user won't be allowed to input a longer string.
     """
-
     msg += ': '
     print()
     while 1:
@@ -143,17 +143,70 @@ def input_str(msg: str, fallback = None,
                 return fallback
             continue
         if min_len is not None and len(value) < min_len:
-            info_input(f"Input must have more than {min_len} chars")
+            info_input(f'Input must have more than {min_len} chars')
             clear_last_line()
             continue
         if max_len is not None and len(value) > max_len:
-            info_input(f"Input must have less than {max_len} chars")
+            info_input(f'Input must have less than {max_len} chars')
             clear_last_line()
             continue
+
         return value
 
+def input_strs(msg: str, fallback = None, min_len: int|None = None,
+               max_len: int|None = None) -> list[str]:
+    """Asks the user to input one or more strings (comma separated). Returns them.
+
+    If `fallback` isn't `None`, it will be returned as-is if the user doesn't input anything.\n
+    If `min_len` isn't `None`, all of the values will have at least that length.\n
+    If `max_len` isn't `None`, all of the values will have at most that length.
+    """
+    msg += ': '
+    print()
+    while 1:
+        clear_last_line()
+        # Print fallback value
+        if fallback is not None and fallback is not Ellipsis:
+            fallback_str = str(fallback)
+            if isinstance(fallback, list):
+                fallback_str = ','.join(fallback)
+            color_print((' ' * len(msg)) + f'[darkgray]{fallback_str}', end='\r')
+
+        value = color_input(msg)
+        if not IN_COLAB:
+            # If fallback value is larger than the input, the gray
+            # text will still be there so print the whole line again
+            clear_last_line()
+            if len(value) == 0 and fallback is not None and fallback is not Ellipsis:
+                color_print(f'{msg}{fallback_str}')
+            else:
+                color_print(f'{msg}{value}')
+
+        if len(value) == 0:
+            if fallback is not None:
+                return fallback
+            continue
+
+        values = value.split(',')
+        for v in values:
+            if min_len is not None and len(v) < min_len:
+                info_input(f'All values must have more than {min_len} chars')
+                clear_last_line()
+                values = None
+                break
+            if max_len is not None and len(v) > max_len:
+                info_input(f'All values must have less than {max_len} chars')
+                clear_last_line()
+                values = None
+                break
+
+        if values is None:
+            continue
+
+        return values
+
 def _input_number(type: type, msg: str, fallback = None,
-                  min = None, max = None, accepted_values = None):
+                  min = None, max = None, accepted_values: list = None):
     print()
     while 1:
         clear_last_line()
@@ -168,19 +221,59 @@ def _input_number(type: type, msg: str, fallback = None,
             continue
 
         if min is not None and result < min:
-            info_input(f"Number can't be less than {min}")
+            info_input(f'Number can\'t be less than {min}')
             clear_last_line()
             continue
         if max is not None and result > max:
-            info_input(f"Number can't be higher than {max}")
+            info_input(f'Number can\'t be higher than {max}')
             clear_last_line()
             continue
         if accepted_values is not None and not result in accepted_values:
-            info_input(f"Invalid value {accepted_values}")
+            info_input(f'Number must be one of the following: {accepted_values}')
             clear_last_line()
             continue
 
         return result
+    
+def _input_numbers(type: type, msg: str, fallback = None,
+                   min = None, max = None, accepted_values = None) -> list:
+    print()
+    while 1:
+        clear_last_line()
+        values = input_strs(msg, fallback)
+        if values == fallback:
+            # Return fallback as-is. Don't apply checks to it.
+            return fallback
+
+        for i, value in enumerate(values):
+            try:
+                result = type(value)
+            except ValueError:
+                values = None
+                break
+
+            if min is not None and result < min:
+                info_input(f'Numbers can\'t be less than {min}')
+                clear_last_line()
+                values = None
+                break
+            if max is not None and result > max:
+                info_input(f'Numbers can\'t be higher than {max}')
+                clear_last_line()
+                values = None
+                break
+            if accepted_values is not None and not result in accepted_values:
+                info_input(f'All numbers must be one of the following: {accepted_values}')
+                clear_last_line()
+                values = None
+                break
+
+            values[i] = result
+
+        if values is None:
+            continue
+
+        return values
     
 def input_float(msg: str, fallback = None,
                 min: float|None = None, max: float|None = None,
@@ -192,8 +285,19 @@ def input_float(msg: str, fallback = None,
     If `max` isn't `None`, the user won't be allowed to input a higher number.\n
     If `accepted_values` isn't `None`, the user won't be allowed to input any value not inside it.
     """
-    
     return _input_number(float, msg, fallback, min, max, accepted_values)
+
+def input_floats(msg: str, fallback = None,
+                 min: float|None = None, max: float|None = None,
+                 accepted_values: list[float]|None = None) -> list[float]:
+    """Asks the user to input one or more floats. Returns them.
+    
+    If `fallback` isn't `None`, it will be returned as-is if the user doesn't input anything.\n
+    If `min` isn't `None`, the user won't be allowed to input a lower number.\n
+    If `max` isn't `None`, the user won't be allowed to input a higher number.\n
+    If `accepted_values` isn't `None`, the user won't be allowed to input any value not inside it.
+    """
+    return _input_numbers(float, msg, fallback, min, max, accepted_values)
 
 def input_int(msg: str, fallback = None, 
               min: int|None = None, max: int|None = None,
@@ -205,8 +309,19 @@ def input_int(msg: str, fallback = None,
     If `max` isn't `None`, the user won't be allowed to input a higher number.\n
     If `accepted_values` isn't `None`, the user won't be allowed to input any value not inside it.
     """
-
     return _input_number(int, msg, fallback, min, max, accepted_values)
+
+def input_ints(msg: str, fallback = None,
+               min: int|None = None, max: int|None = None,
+               accepted_values: list[int]|None = None) -> list[int]:
+    """Asks the user to input one or more ints. Returns them.
+    
+    If `fallback` isn't `None`, it will be returned as-is if the user doesn't input anything.\n
+    If `min` isn't `None`, the user won't be allowed to input a lower number.\n
+    If `max` isn't `None`, the user won't be allowed to input a higher number.\n
+    If `accepted_values` isn't `None`, the user won't be allowed to input any value not inside it.
+    """
+    return _input_numbers(int, msg, fallback, min, max, accepted_values)
 
 def input_file(msg: str, fallback: str|None = ...) -> str:
     """Asks the user to input a valid path of a file. Returns it.
