@@ -44,7 +44,7 @@ class Setting:
                 _settings.remove_key(self.key)
             return
 
-        if not type(value) is self.value_type:
-            raise AbortInterrupt(f'Setting "{self.key}"\'s value isn\'t of type "{self.value_type}"', value)
+        assert type(value) is self.value_type, \
+            (f'Expected {self.value_type}, got {type(value)}', self.key)
 
         _settings[self.key] = RawSetting(self.key, str(value))

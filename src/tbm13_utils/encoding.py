@@ -283,7 +283,7 @@ class Serializable:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.to_dict()})'
 
-class SerializableFile:
+class SerializableFile[T: Serializable]:
     """A dictionary-like object that contains `Serializable` objects as values.
 
     It's directly tied to a json file, and each modification updates it.
@@ -292,7 +292,7 @@ class SerializableFile:
     The file is locked with `filelock` while reading/writing to avoid race conditions.
     On every read & write the file and dict is reloaded if it was modified by another process.
     """
-    def __init__(self, path: str, type: Type[Serializable], key_name: str,
+    def __init__(self, path: str, type: Type[T], key_name: str,
                  allow_duplicate_keys: bool = False):
         """`type` is the `Serializable` subclass that this object will contain.
 
@@ -306,10 +306,9 @@ class SerializableFile:
         self._key_name: str = key_name
         self._allow_duplicate_keys = allow_duplicate_keys
 
-        if not key_name in type._create_empty().__dict__:
-            raise AbortInterrupt('SerializableFile: Key name not found', key_name)
-        
-        self._dic: dict[Any, Serializable] = None
+        assert key_name in type._create_empty().__dict__, ('Key name not found', key_name)
+
+        self._dic: dict[Any, T|list[T]] = None
         self._last_modification: float = None
         self._lock = filelock.FileLock(path + '.lock')
 
@@ -339,9 +338,7 @@ class SerializableFile:
                     obj = self.type.from_json(line)
                     key = getattr(obj, self._key_name)
                     if not self._allow_duplicate_keys:
-                        if key in self._dic:
-                            raise AbortInterrupt('SerializableFile: Duplicate key', key)
-
+                        assert not key in self._dic, ('Key already exists', key)
                         self._dic[key] = obj
                     else:
                         self._dic.setdefault(key, []).append(obj)
@@ -368,11 +365,11 @@ class SerializableFile:
 
             self._last_modification = os.path.getmtime(self.path)
 
-    def __getitem__(self, key: Any) -> Serializable|list[Serializable]:
+    def __getitem__(self, key: Any) -> T|list[T]:
         self._read()
         return self._dic[key]
 
-    def get(self, key: Any, default: Serializable) -> Serializable|list[Serializable]:
+    def get(self, key: Any, default: T) -> T|list[T]:
         """Returns the value of `key`.
         
         If `key` isn't found, returns `default`.
@@ -385,22 +382,17 @@ class SerializableFile:
 
         return self._dic[key]
 
-    def __setitem__(self, key: Any, value: Serializable):
-        if self._allow_duplicate_keys:
-            raise AbortInterrupt(
-                'SerializableFile: Cannot set items directly when duplicate keys'
-                'are allowed. Use `add`/`replace` instead.'
-            )
+    def __setitem__(self, key: Any, value: T):
+        assert not self._allow_duplicate_keys, \
+            'Cannot set items directly when duplicate keys are allowed. Use `add`/`replace` instead.'
 
-        if key != getattr(value, self._key_name):
-            raise AbortInterrupt(f'SerializableFile: Key mismatch', key)
-
+        assert key == getattr(value, self._key_name), ('Key mismatch', key)
         with self._lock:
             self._read()
             self._dic[key] = value
             self.write()
 
-    def add(self, value: Serializable):
+    def add(self, value: T):
         """Adds a cloned `value` to the dictionary, if not already present."""
         value = value.clone()
 
@@ -410,22 +402,19 @@ class SerializableFile:
 
             if self._allow_duplicate_keys:
                 self._dic.setdefault(key, [])
-                if value in self._dic[key]:
-                    raise AbortInterrupt('SerializableFile: Duplicate value', value)
+                assert not value in self._dic[key], ('Value already exists', value, key)
                 
                 self._dic[key].append(value)
             else:
-                if key in self._dic:
-                    raise AbortInterrupt('SerializableFile: Duplicate key', key)
-
+                assert not key in self._dic, ('Key already exists', key)
                 self._dic[key] = value
 
             self.write()
 
-    def replace(self, old: Serializable, new: Serializable):
+    def replace(self, old: T, new: T):
         """Replaces `old` with a cloned `new` in the dictionary.
         
-        If `old` isn't found, raises `AbortInterrupt`.
+        If `old` isn't found, raises `AssertionError`.
         """
         new = new.clone()
 
@@ -433,14 +422,11 @@ class SerializableFile:
             self._read()
             key = getattr(old, self._key_name)
             new_key = getattr(new, self._key_name)
-            if key != new_key:
-                raise AbortInterrupt(
-                    'SerializableFile: Replacing with different keys isn\'t supported', key
-                )
+            assert key == new_key, \
+                ('Replacing with different keys isn\'t supported', key, new_key)
 
             if self._allow_duplicate_keys:
-                if not key in self._dic:
-                    raise AbortInterrupt('SerializableFile: Key not found', key)
+                assert key in self._dic, ('Key not found', key)
 
                 found = False
                 for i, obj in enumerate(self._dic[key]):
@@ -450,13 +436,10 @@ class SerializableFile:
                         found = True
                         break
 
-                if not found:
-                    raise AbortInterrupt('SerializableFile: Value not found', old)
+                assert found, ('Value not found', old)
             else:
-                if not key in self._dic:
-                    raise AbortInterrupt('SerializableFile: Key not found', key)
-                if self._dic[key] != old:
-                    raise AbortInterrupt('SerializableFile: Value mismatch', old)
+                assert key in self._dic, ('Key not found', key)
+                assert self._dic[key] == old, ('Value mismatch', old)
 
                 self._dic[key] = new
                 self.write()
@@ -466,32 +449,27 @@ class SerializableFile:
         
         Can only be used when `allow_duplicate_keys` is `False`.
         """
-        if self._allow_duplicate_keys:
-            raise AbortInterrupt(
-                'SerializableFile: Cannot remove key directly when duplicate keys are allowed.'
-                ' Use `remove_value` instead.'
-            )
+        assert not self._allow_duplicate_keys, \
+            'Cannot remove key directly when duplicate keys are allowed. Use `remove_value` instead.'
 
         with self._lock:
             self._read()
-            if not key in self._dic:
-                raise AbortInterrupt('SerializableFile: Key not found', key)
+            assert key in self._dic, ('Key not found', key)
 
             self._dic.pop(key)
             self.write()
 
-    def remove_value(self, value: Serializable):
+    def remove_value(self, value: T):
         """Removes `value` from the dictionary.
         
-        If `value` isn't found, raises `AbortInterrupt`.
+        If `value` isn't found, raises `AssertionError`.
         """
         with self._lock:
             self._read()
             key = getattr(value, self._key_name)
 
             if self._allow_duplicate_keys:
-                if not key in self._dic:
-                    raise AbortInterrupt('SerializableFile: Key not found', key)
+                assert key in self._dic, ('Key not found', key)
 
                 found = False
                 for i, obj in enumerate(self._dic[key]):
@@ -504,13 +482,10 @@ class SerializableFile:
                         found = True
                         break
 
-                if not found:
-                    raise AbortInterrupt('SerializableFile: Value not found', value)
+                assert found, ('Value not found', value)
             else:
-                if not key in self._dic:
-                    raise AbortInterrupt('SerializableFile: Key not found', key)
-                if self._dic[key] != value:
-                    raise AbortInterrupt('SerializableFile: Value mismatch', value)
+                assert key in self._dic, ('Key not found', key)
+                assert self._dic[key] == value, ('Value mismatch', value)
 
                 self._dic.pop(key)
                 self.write()
@@ -520,7 +495,7 @@ class SerializableFile:
         self._read()
         return key in self._dic
     
-    def contains_value(self, value: Serializable) -> bool:
+    def contains_value(self, value: T) -> bool:
         """Returns `True` if `value` is in the dictionary."""
         self._read()
         key = getattr(value, self._key_name)

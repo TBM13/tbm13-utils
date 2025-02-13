@@ -60,10 +60,9 @@ class BaseWorker[T](threading.Thread):
         If `abort()` is called while working, the status will be set to `ABORT_USER`
         and the worker will abort.
         """
-        if start_index < 0 or start_index >= len(work):
-            raise AbortInterrupt('Invalid start index', start_index)
-        if self._status == WorkerStatus.WORKING:
-            raise AbortInterrupt('Can\'t call prepare while working', self.id)
+        assert 0 <= start_index < len(work), ('Invalid start index', start_index)
+        assert self._status != WorkerStatus.WORKING, \
+            ('Can\'t call prepare while working', self.id)
 
         self._work = work
         self._work_index = start_index
@@ -85,8 +84,8 @@ class BaseWorker[T](threading.Thread):
             time.sleep(0.1)
 
     def run(self):
-        if self._work is None:
-            raise AbortInterrupt('prepare() must be called before starting the worker', self.id)
+        assert self._work is not None, \
+            ('prepare() must be called before starting the worker', self.id)
 
         id_s = str(self.id).zfill(2)
         self._status = WorkerStatus.WORKING
@@ -119,8 +118,7 @@ class BaseWorker[T](threading.Thread):
         `ABORT_FINISHED` to signal that the worker was able to
         finish earlier. This is used by the `WorkerSession` class.
         """
-
-        raise AbortInterrupt('Not implemented')
+        raise NotImplementedError()
 
 class WorkerSession[T, W: BaseWorker[T]](Serializable):
     """Facilitates the management of multiple workers working on the same work.
@@ -158,10 +156,8 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):
         Otherwise, it will be `FINISHED_ALL_WORK` when all workers finished
         doing all the work.
         """
-        if len(self.workers_checkpoints) == 0:
-            raise AbortInterrupt('No workers checkpoints loaded')
-        if len(work) == 0:
-            raise AbortInterrupt('No work given')
+        assert self.workers_checkpoints > 0, 'No workers checkpoints loaded'
+        assert len(work) > 0, 'No work given'
         
         workers_num = len(self.workers_checkpoints)
         # Split work between workers
