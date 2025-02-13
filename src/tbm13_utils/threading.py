@@ -156,7 +156,7 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):
         Otherwise, it will be `FINISHED_ALL_WORK` when all workers finished
         doing all the work.
         """
-        assert self.workers_checkpoints > 0, 'No workers checkpoints loaded'
+        assert len(self.workers_checkpoints) > 0, 'No workers checkpoints loaded'
         assert len(work) > 0, 'No work given'
         
         workers_num = len(self.workers_checkpoints)
