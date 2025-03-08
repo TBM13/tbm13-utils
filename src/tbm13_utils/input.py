@@ -5,7 +5,6 @@ import traceback
 
 from typing import Callable
 from .display import *
-from .environment import IN_COLAB
 __all__ = [
     'color_input', 'decorator_input', 'info_input', 'info2_input', 'success_input',
     'debug_input', 'warn_input', 'error_input', 'exception_input',
@@ -19,12 +18,6 @@ __all__ = [
 ##########################################################
 def color_input(text: str) -> str:
     """Applies style to `text` and calls input()."""
-
-    # Colab doesn't properly display text printed 
-    # by input() when it's too long
-    if IN_COLAB:
-        color_print(text)
-        return input()
 
     text += '[0]'
     text = apply_style(text)
@@ -129,14 +122,13 @@ def input_str(msg: str, fallback = None,
             color_print((' ' * len(msg)) + f'[darkgray]{fallback}', end='\r')
 
         value = color_input(msg)
-        if not IN_COLAB:
-            # If fallback value is larger than the input, the gray
-            # text will still be there so print the whole line again
-            clear_last_line()
-            if len(value) == 0 and fallback is not None:
-                color_print(f'{msg}{fallback}')
-            else:
-                color_print(f'{msg}{value}')
+        # If fallback value is larger than the input, the gray
+        # text will still be there so print the whole line again
+        clear_last_line()
+        if len(value) == 0 and fallback is not None:
+            color_print(f'{msg}{fallback}')
+        else:
+            color_print(f'{msg}{value}')
 
         if len(value) == 0:
             if fallback is not None:
@@ -173,14 +165,13 @@ def input_strs(msg: str, fallback = None, min_len: int|None = None,
             color_print((' ' * len(msg)) + f'[darkgray]{fallback_str}', end='\r')
 
         value = color_input(msg)
-        if not IN_COLAB:
-            # If fallback value is larger than the input, the gray
-            # text will still be there so print the whole line again
-            clear_last_line()
-            if len(value) == 0 and fallback is not None and fallback is not Ellipsis:
-                color_print(f'{msg}{fallback_str}')
-            else:
-                color_print(f'{msg}{value}')
+        # If fallback value is larger than the input, the gray
+        # text will still be there so print the whole line again
+        clear_last_line()
+        if len(value) == 0 and fallback is not None and fallback is not Ellipsis:
+            color_print(f'{msg}{fallback_str}')
+        else:
+            color_print(f'{msg}{value}')
 
         if len(value) == 0:
             if fallback is not None:

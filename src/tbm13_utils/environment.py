@@ -5,16 +5,9 @@ import time
 from typing import Callable
 
 __all__ = [
-    'IN_COLAB', 'get_unique_file',
+    'get_unique_file',
     'run_as_root', 'popen_as_root', 'run_and_print_output'
 ]
-
-# Check if we are being executed on Google Colab
-try:
-    import google.colab
-    IN_COLAB = True
-except ImportError:
-    IN_COLAB = False
 
 def get_unique_file(file_path: str) -> str:
     """Generates an unique file name for `file_path` and returns it.

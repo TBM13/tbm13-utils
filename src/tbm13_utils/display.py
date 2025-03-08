@@ -5,9 +5,8 @@ import subprocess
 import sys
 
 from typing import MutableSequence, Iterable
-from .environment import *
 __all__ = [
-    'title', 'style', 'get_terminal_width', 'apply_style', 'remove_style',
+    'title', 'style', 'apply_style', 'remove_style',
     'color_print', 'move_new_lines', 'decorator_print', 'info', 'info2',
     'success', 'debug', 'warn', 'error', 'clear', 'clear_last_line', 
     'print_separator', 'print_title', 'print_dict', 'print_table',
@@ -56,21 +55,6 @@ decorators = {
 }
 
 ##########################################################
-# Terminal Info
-##########################################################
-def get_terminal_width(fallback: int = 50) -> int:
-    """Returns the width (columns) of the terminal.
-    
-    If we are running in Google Colab, returns `fallback`.
-    """
-
-    # Colab doesn't support getting the width of the output box
-    if IN_COLAB:
-        return fallback
-    
-    return os.get_terminal_size().columns
-
-##########################################################
 # Text Modifications
 ##########################################################
 def apply_style(text: str) -> str:
@@ -104,9 +88,6 @@ def move_new_lines(src: str, dst: str) -> tuple[str, str]:
 def clear():
     """Executes clear (Linux) or cls (Windows)."""
 
-    if IN_COLAB:
-        return
-
     if platform.system() == 'Windows': 
         subprocess.run(['cls'], shell=True)
     else: 
@@ -115,10 +96,7 @@ def clear():
 def clear_last_line():
     """Clears the last line in the console, overwriting it."""
 
-    if IN_COLAB:
-        return
-
-    whitespace = ' ' * get_terminal_width()
+    whitespace = ' ' * os.get_terminal_size().columns
     print(f'\033[A{whitespace}\033[A')
 
 def color_print(text: str, output=sys.stdout, end: str = '\n'):
@@ -153,7 +131,7 @@ def error(text: str):
 def print_separator(char: str, style: str = ''):
     """Prints `char` until it fills the terminal horizontally."""
 
-    width = get_terminal_width()
+    width = os.get_terminal_size().columns
     separator = char * width
     color_print(style + separator.center(width))
 
@@ -167,8 +145,9 @@ def print_title(subtitle: str = '',
     if len(title) > 0 and len(subtitle) > 0:
         subtitle = ' | ' + subtitle
 
+    terminal_width = os.get_terminal_size().columns
     print_separator(separator, style)
-    color_print(f'[bold]{style}' + (title + subtitle).center(get_terminal_width()))
+    color_print(f'[bold]{style}' + (title + subtitle).center(terminal_width))
     print_separator(separator, style)
 
 def print_dict(title: str, dic: dict[str, str],
@@ -195,7 +174,7 @@ def print_table(columns: dict[str, int],
     If `invert_print_order` is `True`, the table will be printed from bottom to top.
     """
 
-    terminal_columns = get_terminal_width()
+    terminal_columns = os.get_terminal_size().columns
 
     dynamic_columns_amount = 0
     fixed_columns_size = 0
