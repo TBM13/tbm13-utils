@@ -15,7 +15,7 @@ class RawSetting(Serializable):
     def _create_empty(cls):
         return cls('', None)
 
-_settings = SerializableFile('config.json', RawSetting, 'key')
+_settings: SerializableFile[RawSetting]|None = None
 
 T = TypeVar('T')
 class Setting:
@@ -23,6 +23,10 @@ class Setting:
         self.key = key
         self.value_type = value_type
         self.default_value = default_value
+
+        global _settings
+        if _settings is None:
+            _settings = SerializableFile('config.json', RawSetting, 'key')
 
     @property
     def value(self) -> T|None:
