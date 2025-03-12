@@ -67,12 +67,12 @@ def run_and_print_output(print_func: Callable[[str], None],
     kwargs['stderr'] = subprocess.STDOUT
     kwargs.setdefault('encoding', 'utf8')
 
-    try:
-        if root:
-            proc = popen_as_root(args, **kwargs)
-        else:
-            proc = subprocess.Popen(args, **kwargs)
+    if root:
+        proc = popen_as_root(args, **kwargs)
+    else:
+        proc = subprocess.Popen(args, **kwargs)
 
+    try:
         while 1:
             line = proc.stdout.readline()
             if not line: 
@@ -90,3 +90,5 @@ def run_and_print_output(print_func: Callable[[str], None],
         # when user presses CTRL + C
         time.sleep(0.1)
         raise KeyboardInterrupt
+    finally:
+        proc.terminate()
