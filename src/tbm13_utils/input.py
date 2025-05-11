@@ -2,9 +2,10 @@ import copy
 import os
 import re
 import traceback
-
 from typing import Callable
+
 from .display import *
+
 __all__ = [
     'color_input', 'decorator_input', 'info_input', 'info2_input', 'success_input',
     'debug_input', 'warn_input', 'error_input', 'exception_input',
@@ -45,18 +46,29 @@ def warn_input(text: str) -> str:
 def error_input(text: str) -> str:
     return decorator_input(decorators['error'], text)
 
-def exception_input(exception: Exception, block: bool = True):
+def exception_input(exception: Exception, block: bool = True) -> int:
+    """Prints the exception args and the method, file & line where
+    it was raised.
+
+    If `block` is True (default), uses `error_input()` instead of `error()`.
+
+    Returns the number of printed lines.
+    """
     print()
+    printed_lines = 1
 
     tb = traceback.extract_tb(exception.__traceback__)[-1]
-    args = ''
+    args = exception.args
     msg = exception.__class__.__name__
     details = tb.line
-    if len(exception.args) > 0:
+    if len(exception.args) == 1:
         args = exception.args[0]
 
     if isinstance(args, tuple):
-        if isinstance(args[0], str):
+        if len(args) == 0:
+            if not isinstance(exception, AssertionError):
+                details = ''
+        elif isinstance(args[0], str):
             msg = args[0]
             details = ','.join(repr(arg) for arg in args[1:])
         else:
@@ -73,6 +85,7 @@ def exception_input(exception: Exception, block: bool = True):
             msg += f': [darkgray]{details}'
         else:
             debug(repr(details))
+            printed_lines += 1
 
     filename = os.path.basename(tb.filename)
     msg = f'Abort[darkgray]({tb.name}@{filename}:{tb.lineno})[red]: {msg}'
@@ -80,6 +93,9 @@ def exception_input(exception: Exception, block: bool = True):
         error_input(msg)
     else:
         error(msg)
+
+    printed_lines += 1
+    return printed_lines
 
 ##########################################################
 # Advanced Input
