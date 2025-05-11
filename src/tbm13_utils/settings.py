@@ -41,7 +41,9 @@ class Setting[T]:
                 _settings.pop(self.key)
             return
 
-        assert type(value) is self.value_type, \
-            (f'Expected {self.value_type}, got {type(value)}', self.key)
+        if type(value) is not self.value_type:
+            raise TypeError(
+                f'Expected {self.value_type}, got {type(value)}', self.key
+            )
 
         _settings.set(RawSetting(self.key, str(value)))

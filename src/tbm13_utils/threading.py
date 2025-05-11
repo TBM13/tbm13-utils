@@ -62,9 +62,10 @@ class BaseWorker[T](threading.Thread):
         If `abort()` is called while working, the status will be set to `ABORT_USER`
         and the worker will abort.
         """
-        assert 0 <= start_index < len(work), ('Invalid start index', start_index)
-        assert self._status != WorkerStatus.WORKING, \
-            ('Can\'t call prepare while working', self.id)
+        if not 0 <= start_index < len(work):
+            raise ValueError('Invalid start index', start_index)
+        if self._status == WorkerStatus.WORKING:
+            raise Exception('Can\'t call prepare while working', self.id)
 
         self._work = work
         self._work_index = start_index
@@ -86,8 +87,8 @@ class BaseWorker[T](threading.Thread):
             time.sleep(0.1)
 
     def run(self):
-        assert self._work is not None, \
-            ('prepare() must be called before starting the worker', self.id)
+        if self._work is None:
+            raise Exception('prepare() must be called before starting the worker', self.id)
 
         id_s = str(self.id).zfill(2)
         self._status = WorkerStatus.WORKING
@@ -157,8 +158,10 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):
         Otherwise, it will be `FINISHED_ALL_WORK` when all workers finished
         doing all the work.
         """
-        assert len(self.workers_checkpoints) > 0, 'No workers checkpoints loaded'
-        assert len(work) > 0, 'No work given'
+        if len(self.workers_checkpoints) == 0:
+            raise Exception('No workers checkpoints loaded')
+        if len(work) == 0:
+            raise Exception('No work given')
         
         workers_num = len(self.workers_checkpoints)
         # Split work between workers

@@ -71,7 +71,9 @@ class Host(Serializable):
     def ip(self, value: str|None):
         if value is not None:
             match = IP_PATTERN.match(value)
-            assert match is not None, ('Invalid IP', value)
+            if match is None:
+                raise ValueError('Invalid IP', value)
+
             value = match.group(0)
 
         self._ip = value
@@ -90,7 +92,8 @@ class Host(Serializable):
                 except ValueError:
                     raise ValueError('Invalid port', value)
 
-            assert 0 <= value <= 65535, ('Invalid port', value)
+            if not 0 <= value <= 65535:
+                raise ValueError('Invalid port', value)
 
         self._port = value
 
@@ -127,8 +130,8 @@ class Host(Serializable):
     @base_url.setter
     def base_url(self, value: str):
         match = URL_PATTERN.match(value)
-        assert match is not None, ('Invalid URL', value)
-        assert match.group(4) is not None, ('Invalid URL', value)
+        if match is None or match.group(4) is None:
+            raise ValueError('Invalid URL', value)
 
         self.scheme = match.group(3)
         self.ip = match.group(5)
