@@ -1,10 +1,13 @@
+import contextlib
 import time
-
 from typing import Callable
+
 from .display import *
 from .input import *
+
 __all__ = [
-    'ReturnInterrupt', 'RetryInterrupt', 'call_retriable_func'
+    'ReturnInterrupt', 'RetryInterrupt',
+    'handle_exceptions', 'call_retriable_func'
 ]
 
 class ReturnInterrupt(Exception):
@@ -13,6 +16,24 @@ class ReturnInterrupt(Exception):
 
 class RetryInterrupt(Exception):
     pass
+
+@contextlib.contextmanager
+def handle_exceptions(block: bool = True):
+    """Wraps the code in a try-except block that catches
+    and prints any exception that occurs.
+    
+    If `block` is True (default), the user will have to
+    press ENTER to continue after the exception is printed,
+    and the printed lines will be cleared after.
+    """
+    try:
+        yield
+    except (ReturnInterrupt, RetryInterrupt) as e:
+        raise e
+    except Exception as e:
+        for i in range(exception_input(e, block)):
+            if block:
+                clear_last_line()
 
 def call_retriable_func(func: Callable, max_retries: int = -1, 
                         wait_between_retries: float = 0.2,
