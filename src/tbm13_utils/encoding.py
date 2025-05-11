@@ -101,10 +101,10 @@ class Serializable(metaclass=InheritReprEqMeta):
                 or field.name in self._ignored_fields
             ):
                 continue
-            elif isinstance(self.__dict__[field.name], Serializable):
-                res[field.name] = self.__dict__[field.name]._to_dict()
+            elif isinstance(value, Serializable):
+                res[field.name] = value._to_dict()
             else:
-                res[field.name] = self.__dict__[field.name]
+                res[field.name] = value
 
         return res
     
