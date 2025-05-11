@@ -1,143 +1,152 @@
 import base64
-import filelock
+import dataclasses
+import enum
+import inspect
 import json
 import os
+import pydoc
+import time
+import types
 import urllib.parse
+from typing import Any, Self, Union, get_args, get_origin, overload, override
 
-from typing import Any, Union, Type
+import filelock
+
 from .display import *
 from .flow import *
 
 __all__ = [
-    'Serializable', 'SerializableFile',
+    'Serializable', 'SerializableError',
+    'ObjectsFile', 'MultiKeyObjectsFile',
+    'json_serialize', 'json_deserialize',
     'base64_decode', 'base64_encode',
-    'url_decode', 'url_encode'
+    'url_decode', 'url_encode',
 ]
 
-class Serializable:
-    """Base class for objects that can be serialized to JSON.
+class InheritReprEqMeta(type):
+    def __new__(cls, name, bases, dct):
+        new_cls = super().__new__(cls, name, bases, dct)
+        
+        # Avoid @dataclass decorator from overriding __repr__ and __eq__
+        # on subclasses that don't override it explicitly
+        methods = ['__repr__', '__eq__']
+        for method in methods:
+            if dataclasses.is_dataclass(new_cls) and method not in dct:
+                for base in bases:
+                    if hasattr(base, method) and getattr(base, method) is not getattr(object, method):
+                        setattr(new_cls, method, getattr(base, method))
+                        break
+        
+        return new_cls
+
+class SerializableError(Exception):
+    pass
+
+@dataclasses.dataclass
+class Serializable(metaclass=InheritReprEqMeta):
+    """Base class for objects that can be serialized to and from JSON.
+    Subclasses are expected to be dataclasses.
     
-    Implements `__eq__` and `__repr__`.
+    Field types are mandatory. The following types are supported:
+    `str`, `int`, `float`, `bool`, `None`, `enum.Enum` (and subclasses), `Serializable` (and subclasses).
+
+    Field types can also be `list`/`tuple`/`set`/`dict` of any previously mentioned type
+    (except dictionary keys, they can only be `str`).
+
+    Unions of all these types are also supported. This includes combinations like `list[Serializable|int|None]`.
+
+    Options:
+    - `_ignored_fields`: Fields added here won't be serialized to JSON, won't be checked in `__eq__`
+    & will be ignored on `clone()`, `update()` and `print()`.
+
+    Overrideable methods:
+    - `_to_printable_dict()`: Override to customize `print()`.
+
     """
-    _empty_dict = None
+    _ignored_fields: set[str] = dataclasses.field(
+        default_factory=lambda: set(['_ignored_fields']), init=False)
 
     @classmethod
-    def _create_empty(cls):
-        """Returns an empty instance of the class.
+    def _from_dict(cls, d: dict[str, Any], ignore_list: set[str] = set()):
+        d = d.copy()
         
-        Override this method if `__init__` requires arguments.
-        """
-        return cls()
-    
-    @classmethod
-    def __get_empty_dict(cls) -> dict[str, Any]:
-        if cls._empty_dict is None:
-            cls._empty_dict = cls._create_empty().__dict__
-        
-        return cls._empty_dict
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any], ignore_list: set[str] = set()):
-        """Creates an instance of the class from a dictionary.
-        
-        Override this method to customize how and which values
-        are deserialized from JSON, specially nested objects
-        with `Serializable` instances inside.
-        """
-        obj = cls._create_empty()
-
-        for key, value in d.items():
+        field_names = {field.name for field in dataclasses.fields(cls)}
+        for key, _ in d.items():
             if key in ignore_list:
+                d.pop(key)
                 continue
 
-            v = obj.__dict__.get(key)
-            if isinstance(v, Serializable):
-                value = v.from_dict(value)
-            elif isinstance(v, tuple):
-                value = tuple(value)
-            elif isinstance(v, set):
-                value = set(value)
-
-            setattr(obj, key, value)
+            if not key in field_names:
+                raise SerializableError(
+                    f'Field not found in dataclass', key, cls.__name__
+                )
         
-        return obj
-    
+        return cls(**d)
+
     @classmethod
-    def from_json(cls, s: str):
+    def from_json(cls, s: str) -> Self:
         """Creates an instance of the class from a JSON string."""
-        return cls.from_dict(json.loads(s))
+        caller = inspect.currentframe().f_back
+        return json_deserialize(cls, s, caller.f_locals, caller.f_globals)
 
-    def to_dict(self) -> dict[str, Any]:
-        """Returns a dictionary that contains all non-default values.
-        
-        Override this method to customize how and which values 
-        are serialized to JSON.
+    def _to_dict(self) -> dict[str, Any]:
+        """Returns a dictionary that contains all non-default & non-ignored fields."""
 
-        The values of the returned dict are used in `__eq__` to compare
-        two instances of this class and in various methods of this class.
-        """
-        empty_dic = self.__get_empty_dict()
-        dic = self.__dict__.copy()
+        res = {}
+        for field in dataclasses.fields(self):
+            value = getattr(self, field.name)
+            if (
+                value == field.default
+                or (field.default_factory is not dataclasses.MISSING and value == field.default_factory())
+                or field.name in self._ignored_fields
+            ):
+                continue
+            elif isinstance(self.__dict__[field.name], Serializable):
+                res[field.name] = self.__dict__[field.name]._to_dict()
+            else:
+                res[field.name] = self.__dict__[field.name]
 
-        # Delete default values from JSON
-        for key, value in self.__dict__.items():
-            if value == empty_dic.get(key):
-                dic.pop(key)
-
-        return dic
+        return res
     
     def to_json(self) -> str:
         """Serializes the object to a JSON string that only
-        contains non-default values.
+        contains non-default & non-ignored fields.
         """
-        def serialize(o):
-            if isinstance(o, Serializable):
-                return o.to_dict()
-            elif isinstance(o, set):
-                return list(o)
-
-            return str(o)
-
-        return json.dumps(self, default=serialize)
+        return json_serialize(self._to_dict())
     
-    def clone(self) -> 'Serializable':
-        """Returns a new instance created from `self.to_json()`"""
+    def clone(self) -> Self:
+        """Returns an exact clone of this object, except for the ignored fields."""
         return self.from_json(self.to_json())
-
-    def update(self, other: 'Serializable', ignore_list: set[str] = set()) -> 'Serializable':
-        """Updates the object with the non-default values of `other`.
+    
+    def update(self, other: Self, ignore_list: set[str] = set()):
+        """Updates the object with the non-default & non-ignored fields of `other`.
         
-        Variables in this object will have their value replaced by those
-        in `other.to_dict()`. `Serializable`, `dict` and `set`
-        variables will be merged instead of replaced.
+        Fields of type `Serializable`, `dict` & `set` will be merged instead of replaced.
         """
-        for key, other_val in other.to_dict().items():
+        for key, other_val in other._to_dict().items():
             if key in ignore_list:
                 continue
 
-            if other_val != self.__get_empty_dict().get(key):
-                val = getattr(self, key)
-                if (isinstance(val, Serializable) and
-                    isinstance(other_val, Serializable)):
-                    val.update(other_val)
-                elif isinstance(val, dict) and isinstance(other_val, dict):
-                    val.update(other_val)
-                elif isinstance(val, set) and isinstance(other_val, set):
-                    val.update(other_val)
-                else:
-                    setattr(self, key, other_val)
+            val = getattr(self, key)
+            if (isinstance(val, Serializable) and
+                isinstance(other_val, Serializable)):
+                val.update(other_val)
+            elif isinstance(val, dict) and isinstance(other_val, dict):
+                val.update(other_val)
+            elif isinstance(val, set) and isinstance(other_val, set):
+                val.update(other_val)
+            else:
+                setattr(self, key, other_val)
 
     def _to_printable_dict(self, spaces: int, key_style: str|None = '[cyan]',
                            value_style: str = '[0]') -> dict[str, str]:
-        """Returns a dict with the values of this object that should be printed.
-        Keys are the name of the variables and values a printable string.
-
-        Override this function to customize `self.print()`.
+        """Returns a dict with the data of this object that should be printed.
+        Keys are the field names and values a printable string.
         """
         dic = {
             '_header_': ' ' * spaces + f'{key_style or ""}[bold][{self.__class__.__name__}]'
         }
-        for key, value in self.to_dict().items():
+        for key, value in self._to_dict().items():
             key_s = key.strip('_').replace('_', ' ').title()
             dic[key] = ' ' * (spaces + 2)
             if key_style is not None:
@@ -145,15 +154,13 @@ class Serializable:
             dic[key] += value_style + str(value)
 
         return dic
-
+    
     def print(self, other: Union['Serializable', None] = None,
                spaces: int = 0):
-        """Prints the non-default values of this object with color and style.
+        """Prints the non-default & non-ignored fields of this object with color and style.
         
-        If `other` isn't `None`, the differences between this object's values
-        and `other`'s will also be printed.
+        If `other` isn't `None`, the differences between this and `other` will also be printed.
         """
-
         lines = self._to_printable_dict(spaces)
         if other is not None:
             other_lines = other._to_printable_dict(
@@ -278,232 +285,224 @@ class Serializable:
         if not isinstance(value, self.__class__):
             return False
 
-        return self.to_dict() == value.to_dict()
-    
-    def __repr__(self):
-        return f'{self.__class__.__name__}({self.to_dict()})'
+        return self._to_dict() == value._to_dict()
 
-class SerializableFile[T: Serializable]:
-    """A dictionary-like object that contains `Serializable` objects as values.
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self._to_dict()})'
+
+class ObjectsFile[K, V: object]:
+    """A dictionary-like object that contains objects of type V as values.
 
     It's directly tied to a json file, and each modification updates it.
     Empty lines or comments (lines that start with '#') are ignored.
     
     The file is locked with `filelock` while reading/writing to avoid race conditions.
-    On every read & write the file and dict is reloaded if it was modified by another process.
+    Before every read & write the file is re-read if it was modified externally.
     """
-    def __init__(self, path: str, type: Type[T], key_name: str,
-                 allow_duplicate_keys: bool = False):
-        """`type` is the `Serializable` subclass that this object will contain.
+    def __init__(self, path: str, key_name: str, obj_type: type[V]):
+        """`path` is the path to the JSON file that will be used to read/write the objects from/to.
+        It doesn't need to exist.
+        
+        `key_name` is the name of the object's field that will be used as the key.
 
-        `key_name` is the name of a variable in `type` that will be used as the dictionary's key.
-
-        If `allow_duplicate_keys` is `True`, duplicate keys will be allowed and the values of
-        the dictionary will be a `list[Serializable]` with all the objects with the same respective key.
+        `obj_type` is the type of the objects that will be stored.
         """
         self.path = path
-        self.type = type
         self._key_name: str = key_name
-        self._allow_duplicate_keys = allow_duplicate_keys
-
-        assert key_name in type._create_empty().__dict__, ('Key name not found', key_name)
-
-        self._dic: dict[Any, T|list[T]] = None
+        self._obj_type = obj_type
+        self._dic: dict[K, V] = {}
         self._last_modification: float = None
         self._lock = filelock.FileLock(path + '.lock')
 
         self._read()
+    
+    def _get_key(self, obj: V) -> K:
+        """Returns the key of the object."""
+        return getattr(obj, self._key_name)
+
+    def _clone_object(self, obj: V) -> V:
+        """Clones the object."""
+        return json_deserialize(
+            self._obj_type, json_serialize(obj), locals(), globals()
+        )
+
+    def _add_from_json(self, data: str):
+        obj = json_deserialize(self._obj_type, data, locals(), globals())
+        key = self._get_key(obj)
+        if key in self._dic:
+            raise KeyError('Key already exists', key)
+
+        self._dic[key] = obj
 
     def _read(self):
         """If needed, clears the dictionary and loads the objects from the file."""
 
         with self._lock:
-            if self._dic is not None and self._last_modification == os.path.getmtime(self.path):
+            if not os.path.isfile(self.path):
+                return
+            if self._last_modification is not None and self._last_modification == os.path.getmtime(self.path):
                 return
 
-            self._dic = {}
-            # Create file if it doesn't exist
-            if not os.path.isfile(self.path):
-                open(self.path, 'w').close()
-                self._last_modification = os.path.getmtime(self.path)
-                return
-            
-            # Load `Serializable` objects from file
+            self._dic.clear()         
             with open(self.path, 'r', encoding='utf8') as file:
                 for line in file.readlines():
                     line = line.strip()
                     if len(line) == 0 or line.startswith('#'):
                         continue
 
-                    obj = self.type.from_json(line)
-                    key = getattr(obj, self._key_name)
-                    if not self._allow_duplicate_keys:
-                        assert not key in self._dic, ('Key already exists', key)
-                        self._dic[key] = obj
-                    else:
-                        self._dic.setdefault(key, []).append(obj)
+                    self._add_from_json(line)
 
             self._last_modification = os.path.getmtime(self.path)
+
+    def _obj_to_json_line(self, obj: V) -> str:
+        return json_serialize(obj) + '\n'
 
     def write(self):
-        """Overwrites the file with the current dictionary's values.
+        """Overwrites the JSON file with the stored objects.
         
-        Call this if you modified the dictionary's items manually.
+        Call this method only if you modified one or more objects directly (by reference).
         """
         with self._lock:
+            # Just in case we or some other ObjectsFile instance recently read the file.
+            # If we write to it immediately, the file's modification time
+            # won't change and thus instance won't detect the changes
+            time.sleep(0.01)
+
             with open(self.path, 'w', encoding='utf8') as file:
                 for obj in self._dic.values():
-                    if self._allow_duplicate_keys:
-                        for o in obj:
-                            file.write(o.to_json() + '\n')
-                    else:
-                        file.write(obj.to_json() + '\n')
+                    file.write(self._obj_to_json_line(obj))
 
-                # remove last newline & everything after
-                file.seek(file.tell() - 1)
-                file.truncate()
+                if file.tell() != 0:
+                    # remove last newline & everything after
+                    file.seek(file.tell() - 1)
+                    file.truncate()
+
+            # Wait for OS to update file modification time
+            slept = 0
+            while os.path.getmtime(self.path) == self._last_modification:
+                if slept > 0.5:
+                    raise TimeoutError('Timeout waiting for OS to update file modification time', self.path)
+
+                sleep = 0.005
+                slept += sleep
+                time.sleep(sleep)
 
             self._last_modification = os.path.getmtime(self.path)
 
-    def __getitem__(self, key: Any) -> T|list[T]:
-        self._read()
-        return self._dic[key]
+    @overload
+    def get(self, key: K) -> V:
+        """Returns a clone of the object with the given key."""
+        ...
+    @overload
+    def get(self, key: K, default: V) -> V:
+        """Returns a clone of the object with the given key if it exists.
 
-    def get(self, key: Any, default: T) -> T|list[T]:
-        """Returns the value of `key`.
-        
-        If `key` isn't found, returns `default`.
-
-        Remember to call `write` if you modify the values directly.
+        Otherwise, returns `default` as-is.
         """
+        ...
+    def get(self, key: K, default: V = None) -> V:
         self._read()
-        if not key in self._dic:
-            return default
+        if default is not None:
+            return self._dic.get(key, default)
+        
+        if key not in self._dic:
+            raise KeyError('Key not found', key)
 
-        return self._dic[key]
+        return self._clone_object(self._dic[key])
 
-    def __setitem__(self, key: Any, value: T):
-        assert not self._allow_duplicate_keys, \
-            'Cannot set items directly when duplicate keys are allowed. Use `add`/`replace` instead.'
+    def set(self, obj: V):
+        """Sets the value of the object's key to a clone of `obj`.
 
-        assert key == getattr(value, self._key_name), ('Key mismatch', key)
+        If an object with the same key already exists, it will be replaced.
+        """
+        obj = self._clone_object(obj)
+        key = self._get_key(obj)
         with self._lock:
             self._read()
-            self._dic[key] = value
+            self._dic[key] = obj
             self.write()
 
-    def add(self, value: T):
-        """Adds a cloned `value` to the dictionary, if not already present."""
-        value = value.clone()
-
+    def add(self, obj: V):
+        """Adds a clone of `obj`.
+        
+        Will raise `KeyError` if an object with the same key already exists.
+        """
+        obj = self._clone_object(obj)
+        key = self._get_key(obj)
         with self._lock:
             self._read()
-            key = getattr(value, self._key_name)
+            if key in self._dic:
+                raise KeyError('Key already exists', key)
 
-            if self._allow_duplicate_keys:
-                self._dic.setdefault(key, [])
-                assert not value in self._dic[key], ('Value already exists', value, key)
-                
-                self._dic[key].append(value)
-            else:
-                assert not key in self._dic, ('Key already exists', key)
-                self._dic[key] = value
-
+            self._dic[key] = obj
             self.write()
 
-    def replace(self, old: T, new: T):
-        """Replaces `old` with a cloned `new` in the dictionary.
+    def replace(self, old: V, new: V):
+        """Replaces the object `old` with a clone of the object `new`.
         
-        If `old` isn't found, raises `AssertionError`.
+        `old` and `new` must have the same key. Additionally, `old` must be
+        equal to the stored object.
         """
-        new = new.clone()
+        new = self._clone_object(new)
 
         with self._lock:
             self._read()
-            key = getattr(old, self._key_name)
-            new_key = getattr(new, self._key_name)
-            assert key == new_key, \
-                ('Replacing with different keys isn\'t supported', key, new_key)
+            key = self._get_key(old)
+            new_key = self._get_key(new)
 
-            if self._allow_duplicate_keys:
-                assert key in self._dic, ('Key not found', key)
+            if key not in self._dic:
+                raise KeyError('Key not found', key)
+            if key != new_key:
+                raise KeyError('Key mismatch', key, new_key)
+            if old != self._dic[key]:
+                raise ValueError('Value mismatch', old, self._dic[key])
 
-                found = False
-                for i, obj in enumerate(self._dic[key]):
-                    if obj == old:
-                        self._dic[key][i] = new
-                        self.write()
-                        found = True
-                        break
-
-                assert found, ('Value not found', old)
-            else:
-                assert key in self._dic, ('Key not found', key)
-                assert self._dic[key] == old, ('Value mismatch', old)
-
-                self._dic[key] = new
-                self.write()
-
-    def remove_key(self, key: Any):
-        """Removes `key` from the dictionary.
-        
-        Can only be used when `allow_duplicate_keys` is `False`.
-        """
-        assert not self._allow_duplicate_keys, \
-            'Cannot remove key directly when duplicate keys are allowed. Use `remove_value` instead.'
-
-        with self._lock:
-            self._read()
-            assert key in self._dic, ('Key not found', key)
-
-            self._dic.pop(key)
+            self._dic[key] = new
             self.write()
 
-    def remove_value(self, value: T):
-        """Removes `value` from the dictionary.
+    @overload
+    def pop(self, key: K) -> V:
+        """Removes the object with the same key as `key` and returns it."""
+        ...
+    @overload
+    def pop(self, obj: V) -> V:
+        """Removes the object with the same key as the given object.
         
-        If `value` isn't found, raises `AssertionError`.
+        Returns the removed object.
         """
+        ...
+    def pop(self, val: K|V) -> V:
         with self._lock:
             self._read()
-            key = getattr(value, self._key_name)
-
-            if self._allow_duplicate_keys:
-                assert key in self._dic, ('Key not found', key)
-
-                found = False
-                for i, obj in enumerate(self._dic[key]):
-                    if obj == value:
-                        self._dic[key].pop(i)
-                        if len(self._dic[key]) == 0:
-                            self._dic.pop(key)
-
-                        self.write()
-                        found = True
-                        break
-
-                assert found, ('Value not found', value)
+            if isinstance(val, self._obj_type):
+                key = self._get_key(val)
             else:
-                assert key in self._dic, ('Key not found', key)
-                assert self._dic[key] == value, ('Value mismatch', value)
+                key = val
 
-                self._dic.pop(key)
-                self.write()
+            if key not in self._dic:
+                raise KeyError('Key not found', key)
 
-    def contains_key(self, key: Any) -> bool:
-        """Returns `True` if `key` is in the dictionary."""
+            obj = self._dic.pop(key)
+            self.write()
+            return obj
+
+    @overload
+    def contains(self, key: K) -> bool:
+        """Returns `True` if `key` is stored."""
+        ...
+    @overload
+    def contains(self, obj: V) -> bool:
+        """Returns `True` if an object with the same key as `obj` is stored."""
+        ...
+    def contains(self, val: K|V) -> bool:
         self._read()
+        if isinstance(val, self._obj_type):
+            key = self._get_key(val)
+        else:
+            key = val
+
         return key in self._dic
-    
-    def contains_value(self, value: T) -> bool:
-        """Returns `True` if `value` is in the dictionary."""
-        self._read()
-        key = getattr(value, self._key_name)
-        if self._allow_duplicate_keys:
-            return key in self._dic and value in self._dic[key]
 
-        return key in self._dic and self._dic[key] == value
-    
     def items(self):
         """Returns the dictionary's `items()`.
         
@@ -531,6 +530,283 @@ class SerializableFile[T: Serializable]:
     def __len__(self) -> int:
         self._read()
         return len(self._dic)
+
+class MultiKeyObjectsFile[K, V: object](ObjectsFile[K, list[V]]):
+    """Just like `ObjectsFile`, but allows multiple objects with the same key."""
+
+    @override
+    def __init__(self, path, key_name, obj_type):
+        self._actual_obj_type = obj_type
+        super().__init__(path, key_name, list[obj_type])
+
+    @override
+    def _get_key(self, obj: V|list[V]) -> K:
+        if isinstance(obj, list):
+            key = getattr(obj[0], self._key_name)
+            if not all(getattr(o, self._key_name) == key for o in obj):
+                raise KeyError('Key mismatch', key, obj)
+
+            return key
+
+        return getattr(obj, self._key_name)
+
+    def _clone_actual_object(self, obj: V) -> V:
+        return json_deserialize(
+            self._actual_obj_type, json_serialize(obj), locals(), globals()
+        )
+
+    @override
+    def _add_from_json(self, data):
+        obj = json_deserialize(self._actual_obj_type, data, locals(), globals())
+        key = self._get_key(obj)
+        self._dic.setdefault(key, []).append(obj)
+
+    @override
+    def _obj_to_json_line(self, obj):
+        res = ''
+        for o in obj:
+            res += json_serialize(o) + '\n'
+
+        return res
+
+    @override
+    def add(self, obj: V):
+        """Adds a clone of `obj`.
+        
+        Raises `ValueError` if an object equal to `obj` already exists.
+        """
+        obj = self._clone_actual_object(obj)
+        key = self._get_key(obj)
+        with self._lock:
+            self._read()
+
+            if obj in self._dic.get(key, []):
+                raise ValueError('Object already exists', obj)
+
+            self._dic.setdefault(key, []).append(obj)
+            self.write()
+
+    @override
+    def replace(self, old: V, new: V):
+        new = self._clone_actual_object(new)
+
+        with self._lock:
+            self._read()
+            key = self._get_key(old)
+            new_key = self._get_key(new)
+
+            if key not in self._dic:
+                raise KeyError('Key not found', key)
+            if key != new_key:
+                raise KeyError('Key mismatch', key, new_key)
+            if old not in self._dic[key]:
+                raise ValueError('Old object not found', old, self._dic[key])
+            if new in self._dic[key]:
+                raise ValueError('New object already exists', new)
+
+            for i, obj in enumerate(self._dic[key]):
+                if obj == old:
+                    self._dic[key][i] = new
+                    break
+            else:
+                raise ValueError('Value not found', old, self._dic[key])
+
+            self.write()
+
+    @overload
+    def pop(self, key: K) -> list[V]:
+        """Removes the objects with the same key as `key` and returns them."""
+        ...
+    @overload
+    def pop(self, obj: V) -> V:
+        """Removes the object that is equal to `obj`.
+        
+        Returns the removed object.
+        """
+        ...
+    @override
+    def pop(self, val: K|V) -> V|list[V]:
+        with self._lock:
+            self._read()
+            if isinstance(val, self._actual_obj_type):
+                key = self._get_key(val)
+            else:
+                key = val
+
+            if key not in self._dic:
+                raise KeyError('Key not found', key)
+
+            if isinstance(val, self._actual_obj_type):
+                for i, obj in enumerate(self._dic[key]):
+                    if obj == val:
+                        obj = self._dic[key].pop(i)
+                        if len(self._dic[key]) == 0:
+                            self._dic.pop(key)
+                        break
+                else:
+                    raise ValueError('Value not found', val, self._dic[key])
+            else:
+                obj = self._dic.pop(key)
+
+            self.write()
+            return obj
+
+    @overload
+    def contains(self, key: K) -> bool:
+        """Returns `True` if at least one of object with the given key is stored."""
+        ...
+    @overload
+    def contains(self, obj: V) -> bool:
+        """Returns `True` if an object equal to `obj` is stored."""
+        ...
+    @override
+    def contains(self, val: K|V) -> bool:
+        self._read()
+        if isinstance(val, self._actual_obj_type):
+            key = self._get_key(val)
+            return key in self._dic and any(obj == val for obj in self._dic[key])
+        else:
+            key = val
+
+        return key in self._dic
+    
+    @overload
+    def count(self) -> int:
+        """Returns the number of stored objects."""
+        ...
+    @overload
+    def count(self, key: K) -> int:
+        """Returns the number of stored objects that have the given key."""
+        ...
+    def count(self, key: K|None = None) -> int:
+        self._read()
+        if key is None:
+            res = 0
+            for obj_list in self._dic.values():
+                res += len(obj_list)
+
+            return res
+        else:
+            if key not in self._dic:
+                return 0
+
+            return len(self._dic[key])
+
+def json_serialize(obj: Any) -> str:
+    """Serializes the object to a JSON string."""
+    def serialize(o):
+        if isinstance(o, Serializable):
+            return o._to_dict()
+        elif isinstance(o, set):
+            return list(o)
+        elif isinstance(o, enum.Enum):
+            return o.value
+
+        return str(o)
+
+    return json.dumps(obj, default=serialize)
+
+def json_deserialize[T](obj_type: type[T], data: str, caller_locals: dict, caller_globals: dict) -> T:
+    """Deserializes the object from a JSON string."""
+    def get_value(expected_type: type, value: Any) -> Any:
+        def assert_type(expected_type, value):
+            if not isinstance(value, expected_type):
+                raise TypeError(f'Expected {expected_type}, got {type(value)}', data)
+
+        if expected_type is None:
+            if value is not None:
+                raise TypeError(f'Expected None, got {type(value)}', data)
+
+            return None
+        elif isinstance(expected_type, str):
+            # We are likely dealing with a type like 'SelfClass|SomethingElse'
+            for t in expected_type.split('|'):
+                if t == 'None':
+                    actual_type = None
+                else:
+                    actual_type = (
+                        pydoc.locate(t) or caller_locals.get(t, None) or caller_globals.get(t, None)
+                    )
+                    if actual_type is None:
+                        raise Exception('Type not found', t, data)
+
+                try:
+                    return get_value(actual_type, value)
+                except TypeError:
+                    continue
+                
+            raise TypeError(
+                f'Value "{type(value)}" not compatible with any of the types in "{expected_type}"',
+                value
+            )
+
+        if (origin := get_origin(expected_type)) is not None:
+            if origin is types.UnionType:
+                for union_type in get_args(expected_type):
+                    try:
+                        return get_value(union_type, value)
+                    except TypeError:
+                        continue
+
+                raise TypeError(
+                    f'Value of type "{type(value)}" not compatible with any of the types in "{expected_type}"',
+                    value
+                )
+
+            if origin is list:
+                expected_value_type = get_args(expected_type)[0]
+                value = [get_value(expected_value_type, x) for x in value]
+            elif origin is dict:
+                expected_key_type, expected_value_type = get_args(expected_type)
+                if expected_key_type is not str:
+                    raise TypeError(
+                        f'Dicts with non-string keys aren\'t supported',
+                        expected_key_type, data
+                    )
+
+                value = {
+                    get_value(expected_key_type, k): get_value(expected_value_type, v) 
+                    for k, v in value.items()
+                }
+            elif origin is set:
+                expected_value_type = get_args(expected_type)[0]
+                value = set(get_value(expected_value_type, x) for x in value)
+            elif origin is tuple:
+                args = []
+                for i, expected_value_type in enumerate(get_args(expected_type)):
+                    args.append(get_value(expected_value_type, value[i]))
+
+                value = tuple(args)
+
+            assert_type(origin, value)
+
+        elif issubclass(expected_type, enum.Enum):
+            if issubclass(expected_type, enum.StrEnum):
+                assert_type(str, value)
+            else:
+                assert_type(int, value)
+
+            value = expected_type(value)
+            assert_type(expected_type, value)
+
+        elif dataclasses.is_dataclass(expected_type):
+            assert_type(dict, value)
+            for field in dataclasses.fields(expected_type):
+                if field.name in value:
+                    value[field.name] = get_value(field.type, value[field.name])
+                else:
+                    assert (field.default is not dataclasses.MISSING) or (field.default_factory is not dataclasses.MISSING), \
+                        ("Required field not found in JSON", field.name, data)
+
+            value = expected_type._from_dict(value)
+            assert_type(expected_type, value)
+
+        else:
+            assert_type(expected_type, value)
+
+        return value
+
+    return get_value(obj_type, json.loads(data))
 
 def base64_decode(s: str) -> str:
     """Decodes a Base64-encoded string."""

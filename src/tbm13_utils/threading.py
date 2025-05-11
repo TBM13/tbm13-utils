@@ -1,13 +1,15 @@
 import collections
+import dataclasses
 import enum
 import statistics
 import threading
 import time
-from typing import Sequence, Type, override
+from typing import Sequence, Type
 
 from .display import *
 from .encoding import *
 from .flow import *
+
 __all__ = [
     'WorkerStatus', 'BaseWorker', 'WorkerSession'
 ]
@@ -120,12 +122,16 @@ class BaseWorker[T](threading.Thread):
         """
         raise NotImplementedError()
 
+@dataclasses.dataclass(init=False)
 class WorkerSession[T, W: BaseWorker[T]](Serializable):
     """Facilitates the management of multiple workers working on the same work.
 
-    This class is prepared to be stored in a `SerializableFile` to save the
+    This class is prepared to be stored in a `ObjectsFile` to save the
     progress of the workers.
     """
+    work_hash: str
+    workers_checkpoints: list[int]
+
     def __init__(self, work_hash: str, workers_checkpoints: list[int]):
         """The length of `workers_checkpoints` will be the amount of
         workers that are going to be used.
@@ -139,11 +145,6 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):
         """
         self.work_hash = work_hash
         self.workers_checkpoints = workers_checkpoints
-
-    @classmethod
-    @override
-    def _create_empty(cls):
-        return WorkerSession('', [])
 
     def run(self, worker_type: Type[W], work: Sequence[T]) -> tuple[WorkerStatus, list[W]]:
         """Prepares & starts the workers to work on the given work,

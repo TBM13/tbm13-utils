@@ -1,32 +1,25 @@
-from typing import Type, TypeVar
+import dataclasses
+from typing import Type
 
-from .flow import *
 from .encoding import *
+from .flow import *
+
 __all__ = [
     'Setting'
 ]
 
+@dataclasses.dataclass
 class RawSetting(Serializable):
-    def __init__(self, key: str, value: str):
-        self.key = key
-        self.value = value
+    key: str
+    value: str
 
-    @classmethod
-    def _create_empty(cls):
-        return cls('', None)
+_settings: ObjectsFile[str, RawSetting] = ObjectsFile('config.json', 'key', RawSetting)
 
-_settings: SerializableFile[RawSetting]|None = None
-
-T = TypeVar('T')
-class Setting:
+class Setting[T]:
     def __init__(self, key: str, value_type: Type[T], default_value: T|None = None):
         self.key = key
         self.value_type = value_type
         self.default_value = default_value
-
-        global _settings
-        if _settings is None:
-            _settings = SerializableFile('config.json', RawSetting, 'key')
 
     @property
     def value(self) -> T|None:
@@ -36,19 +29,19 @@ class Setting:
         Must always be of type `value_type`. Setting this
         to `None` will delete the setting.
         """
-        if _settings.contains_key(self.key):
-           return self.value_type(_settings[self.key].value)
+        if _settings.contains(self.key):
+           return self.value_type(_settings.get(self.key).value)
 
         return self.default_value
     
     @value.setter
     def value(self, value: T|None):
         if value is None:
-            if _settings.contains_key(self.key):
-                _settings.remove_key(self.key)
+            if _settings.contains(self.key):
+                _settings.pop(self.key)
             return
 
         assert type(value) is self.value_type, \
             (f'Expected {self.value_type}, got {type(value)}', self.key)
 
-        _settings[self.key] = RawSetting(self.key, str(value))
+        _settings.set(RawSetting(self.key, str(value)))

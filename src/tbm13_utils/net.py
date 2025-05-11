@@ -1,15 +1,21 @@
+import dataclasses
+import enum
 import http.client
+import re
 import socket
 import time
-import re
+from typing import override
+
 import requests
 import urllib3.util.url
 
 from .display import *
-from .flow import *
 from .encoding import *
+from .flow import *
+
 __all__ = [
-    'IP_PATTERN_STR', 'IP_PATTERN', 'URL_PATTERN', 'Host',
+    'IP_PATTERN_STR', 'IP_PATTERN', 'URL_PATTERN',
+    'Scheme', 'Host',
     'request_get','request_post', 'socket_connection'
 ]
 
@@ -26,102 +32,75 @@ IP_PATTERN = re.compile(f'^{IP_PATTERN_STR}$')
 URL_PATTERN = re.compile(
     r'(^((https?):\/\/)?((' + IP_PATTERN_STR + r')|((\d|\w|\.)+))(\:(\d+))?)(\/(.+)?)?$'
 )
-class Host(Serializable):
-    def __init__(self, base_url: str = '') -> None:
-        self._scheme: int = ''
-        self._domain: str = ''
-        self._ip: str = ''
-        self._port: int = -1
 
-        if len(base_url) > 0:
+class Scheme(enum.StrEnum):
+    HTTP = 'http'
+    HTTPS = 'https'
+
+@dataclasses.dataclass(init=False)
+class Host(Serializable):
+    _scheme: Scheme|None = None
+    _domain: str|None = None
+    _ip: str|None = None
+    _port: int|None = None
+
+    @override
+    def __init__(self, base_url: str|None = None):
+        super().__init__()
+        if base_url is not None:
             self.base_url = base_url
 
     @property
-    def scheme(self) -> str | None:
-        """The scheme of the host. If not set, this value is `None`."""
-        if len(self._scheme) == 0:
-            return None
-
+    def scheme(self) -> Scheme | None:
+        """The scheme of the host."""
         return self._scheme
     
     @scheme.setter
-    def scheme(self, value: str|None):
-        if value is None:
-            self._scheme = ''
-            return
-
-        value = value.lower()
-        if not value in ['http', 'https']:
-            error(f'Host: Invalid scheme "{value}"')
-            return
+    def scheme(self, value: Scheme|str|None):
+        if value is not None and not isinstance(value, Scheme):
+            value = Scheme(value.lower())
 
         self._scheme = value
 
     @property
     def ip(self) -> str | None:
-        """The IP address of the host. If not set, this value is `None`."""
-        if len(self._ip) == 0:
-            return None
-
+        """The IP address of the host."""
         return self._ip
     
     @ip.setter
     def ip(self, value: str|None):
-        if value is None:
-            self._ip = ''
-            return
+        if value is not None:
+            match = IP_PATTERN.match(value)
+            assert match is not None, ('Invalid IP', value)
+            value = match.group(0)
 
-        match = IP_PATTERN.match(value)
-        if match is None:
-            error(f'Host: Invalid IP "{value}"')
-            return
-
-        self._ip = match.group(0)
+        self._ip = value
 
     @property
     def port(self) -> int | None:
-        """The port of the host. If not set, this value is `None`."""
-        if self._port == -1:
-            return None
-
+        """The port of the host."""
         return self._port
     
     @port.setter
     def port(self, value: int|str|None):
-        if value is None:
-            self._port = -1
-            return
+        if value is not None:
+            if isinstance(value, str):
+                try:
+                    value = int(value)
+                except ValueError:
+                    raise ValueError('Invalid port', value)
 
-        if isinstance(value, str):
-            try:
-                value = int(value)
-            except ValueError:
-                error(f'Host: Invalid port "{value}"')
-                return
-
-        if value < 0 or value > 65535:
-            error(f'Host: Invalid port "{value}"')
-            return
+            assert 0 <= value <= 65535, ('Invalid port', value)
 
         self._port = value
 
     @property
     def domain(self) -> str | None:
-        """The domain of the host. Example: `www.google.com`
-        
-        If not set, this value is `None`.
-        """
-        if len(self._domain) == 0:
-            return None
-
+        """The domain of the host. Example: `www.google.com`"""
         return self._domain
 
     @domain.setter
     def domain(self, value: str|None):
-        if value is None:
-            self._domain = ''
-            return
-
         self._domain = value
 
     @property
@@ -148,34 +127,16 @@ class Host(Serializable):
     @base_url.setter
     def base_url(self, value: str):
         match = URL_PATTERN.match(value)
-        if match is None or match.group(4) is None:
-            error(f'Host: Invalid URL "{value}"')
-            return
+        assert match is not None, ('Invalid URL', value)
+        assert match.group(4) is not None, ('Invalid URL', value)
 
         self.scheme = match.group(3)
         self.ip = match.group(5)
         self.domain = match.group(6)
         self.port = match.group(9)
 
-    def __eq__(self, value):
-        if not isinstance(value, Host):
-            return False
-
-        return self.base_url == value.base_url
-
     def __str__(self) -> str:
         return self.base_url or ''
-
-    def __repr__(self) -> str:
-        return (
-            'Host('
-            f'scheme={self.scheme}, '
-            f'ip={self.ip}, '
-            f'domain={self.domain}, '
-            f'port={self.port}, '
-            f'base_url={self.base_url}'
-            ')'
-        )
 
 def _request(url: str, raw_url: bool, headers, cookies, session, auth,
              allow_redirects: bool, verify: bool,
