@@ -1,6 +1,6 @@
 import contextlib
 import time
-from typing import Callable
+from typing import Any, Callable
 
 from .display import *
 from .input import *
@@ -10,8 +10,8 @@ __all__ = [
     'handle_exceptions', 'call_retriable_func'
 ]
 
-class ReturnInterrupt(Exception):
-    def __init__(self, return_value):
+class ReturnInterrupt[T](Exception):
+    def __init__(self, return_value: T):
         self.return_value = return_value
 
 class RetryInterrupt(Exception):
@@ -28,18 +28,19 @@ def handle_exceptions(block: bool = True):
     """
     try:
         yield
-    except (ReturnInterrupt, RetryInterrupt) as e:
+    except (ReturnInterrupt, RetryInterrupt) as e:   # type: ignore
         raise e
     except Exception as e:
-        for i in range(exception_input(e, block)):
-            if block:
+        printed_lines = exception_input(e, block)
+        if block:
+            for _ in range(printed_lines):
                 clear_last_line()
 
-def call_retriable_func(func: Callable, max_retries: int = -1, 
+def call_retriable_func(func: Callable[..., Any], max_retries: int = -1, 
                         wait_between_retries: float = 0.2,
                         wait_multiplier: float = 1,
                         max_wait: float = -1,
-                        *args, **kwargs):
+                        *args: Any, **kwargs: Any):
     """Calls `func` with `args` and `kwargs`, and recalls it whenever
     it raises `RetryInterrupt` up to `max_retries` times
     (or infinitely if `max_retries` is negative).

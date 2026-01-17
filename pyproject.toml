@@ -22,8 +22,16 @@ classifiers = [
 dependencies = [
   "requests",
   "filelock",
+  "pydantic",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/TBM13/tbm13-utils"
 "Bug Tracker" = "https://github.com/TBM13/tbm13-utils/issues"
+
+[tool.pyright]
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,9 +1,9 @@
 import collections
-import dataclasses
 import enum
 import statistics
 import threading
 import time
+from abc import ABC, abstractmethod
 from typing import Sequence, Type
 
 from .display import *
@@ -19,14 +19,14 @@ class WorkerStatus(enum.IntEnum):
     
     Less than 0 means the worker aborted.
     """
-    ABORT_FINISHED = -3,
-    ABORT_ERROR = -2,
-    ABORT_USER = -1,
-    NOT_STARTED = 0,
-    WORKING = 1,
+    ABORT_FINISHED = -3
+    ABORT_ERROR = -2
+    ABORT_USER = -1
+    NOT_STARTED = 0
+    WORKING = 1
     FINISHED_ALL_WORK = 2
 
-class BaseWorker[T](threading.Thread):
+class BaseWorker[T](threading.Thread, ABC):
     def __init__(self, id: int):
         super(BaseWorker, self).__init__()
 
@@ -36,7 +36,7 @@ class BaseWorker[T](threading.Thread):
         self._work_index: int = 0
 
         # Stats
-        self.work_execution_times = collections.deque(maxlen=10)
+        self.work_execution_times: collections.deque[float] = collections.deque(maxlen=10)
 
     @property
     def status(self) -> WorkerStatus:
@@ -114,6 +114,7 @@ class BaseWorker[T](threading.Thread):
             last_time = now
             self._work_index += 1
 
+    @abstractmethod
     def _do_work(self, elem: T) -> bool:
         """Must be implemented by subclasses.
         
@@ -123,29 +124,21 @@ class BaseWorker[T](threading.Thread):
         """
         raise NotImplementedError()
 
-@dataclasses.dataclass(init=False)
-class WorkerSession[T, W: BaseWorker[T]](Serializable):
+class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
     """Facilitates the management of multiple workers working on the same work.
 
-    This class is prepared to be stored in a `ObjectsFile` to save the
+    This class is prepared to be stored in a `SerializableFile` to save the
     progress of the workers.
+
+    To construct this, you need:
+    * `work_hash`: Optional string meant to be used by third-party scripts
+        to identify if this session corresponds to the work they're doing.
+    * `workers_checkpoints`: List of integers representing the last completed
+        work index for each worker. Its length defines the amount of workers that
+        will be used. If you don't have any checkpoints, the values should be `0`.
     """
     work_hash: str
     workers_checkpoints: list[int]
-
-    def __init__(self, work_hash: str, workers_checkpoints: list[int]):
-        """The length of `workers_checkpoints` will be the amount of
-        workers that are going to be used.
-
-        If you don't have any checkpoints saved and want to use 4 workers,
-        pass a list with 4 zeros.
-
-        `work_hash` is optional and only meant to be used by third-party
-        scripts to identify if this session corresponds to the work they're doing
-        and can resume it from the checkpoints.
-        """
-        self.work_hash = work_hash
-        self.workers_checkpoints = workers_checkpoints
 
     def run(self, worker_type: Type[W], work: Sequence[T]) -> tuple[WorkerStatus, list[W]]:
         """Prepares & starts the workers to work on the given work,
@@ -203,7 +196,7 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):
                         work_per_second += 1 / average
                 
                 # Either a worker aborted (status < 0) or all workers finished all work
-                if global_status < 0 or global_status == WorkerStatus.FINISHED_ALL_WORK:
+                if global_status < 0 or global_status == WorkerStatus.FINISHED_ALL_WORK:    # type: ignore
                     break
 
                 # Print stats every 4 seconds & save progress
@@ -223,10 +216,10 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):
 
         # Signal abort to all workers
         for w in workers:
-            w._status = WorkerStatus.ABORT_USER
+            w._status = WorkerStatus.ABORT_USER     # type: ignore
         # Wait for all workers to exit
         for w in workers:
             info(f'Waiting for w{w.id} to exit')
             w.join()
 
-        return global_status, workers
+        return global_status, workers   # type: ignore

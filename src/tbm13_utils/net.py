@@ -1,13 +1,12 @@
-import dataclasses
 import enum
 import http.client
 import re
 import socket
 import time
-from typing import override
 
 import requests
 import urllib3.util.url
+from pydantic import field_validator
 
 from .display import *
 from .encoding import *
@@ -37,38 +36,24 @@ class Scheme(enum.StrEnum):
     HTTP = 'http'
     HTTPS = 'https'
 
-@dataclasses.dataclass(init=False)
 class Host(Serializable):
-    _scheme: Scheme|None = None
-    _domain: str|None = None
-    _ip: str|None = None
-    _port: int|None = None
-
-    @override
-    def __init__(self, base_url: str|None = None):
-        super().__init__()
-        if base_url is not None:
-            self.base_url = base_url
-
-    @property
-    def scheme(self) -> Scheme | None:
-        """The scheme of the host."""
-        return self._scheme
+    scheme: Scheme|None = None
+    domain: str|None = None
+    """The domain of the host. E.g: `www.google.com`"""
+    ip: str|None = None
+    port: int|None = None
     
-    @scheme.setter
-    def scheme(self, value: Scheme|str|None):
+    @field_validator('scheme')
+    @classmethod
+    def validate_scheme(cls, value: Scheme|str|None) -> Scheme|None:
         if value is not None and not isinstance(value, Scheme):
             value = Scheme(value.lower())
 
-        self._scheme = value
-
-    @property
-    def ip(self) -> str | None:
-        """The IP address of the host."""
-        return self._ip
+        return value
     
-    @ip.setter
-    def ip(self, value: str|None):
+    @field_validator('ip')
+    @classmethod
+    def validate_ip(cls, value: str|None) -> str|None:
         if value is not None:
             match = IP_PATTERN.match(value)
             if match is None:
@@ -76,15 +61,11 @@ class Host(Serializable):
 
             value = match.group(0)
 
-        self._ip = value
-
-    @property
-    def port(self) -> int | None:
-        """The port of the host."""
-        return self._port
+        return value
     
-    @port.setter
-    def port(self, value: int|str|None):
+    @field_validator('port')
+    @classmethod
+    def validate_port(cls, value: int|str|None) -> int|None:
         if value is not None:
             if isinstance(value, str):
                 try:
@@ -94,20 +75,11 @@ class Host(Serializable):
 
             if not 0 <= value <= 65535:
                 raise ValueError('Invalid port', value)
-
-        self._port = value
-
-    @property
-    def domain(self) -> str | None:
-        """The domain of the host. Example: `www.google.com`"""
-        return self._domain
-
-    @domain.setter
-    def domain(self, value: str|None):
-        self._domain = value
+            
+        return value
 
     @property
-    def base_url(self) -> str | None:
+    def base_url(self) -> str|None:
         """The base URL of the host.
         
         This value is generated using `scheme`, `domain`/`ip` and `port`
@@ -116,10 +88,10 @@ class Host(Serializable):
         When setting this, you can pass any full URL as value.
         If possible, `scheme`, `domain`/`ip` and `port` will be extracted from it.
         """
-        if self.domain is None and self.ip is None:
+        base = self.domain or self.ip
+        if base is None:
             return None
         
-        base = self.domain or self.ip
         if self.scheme is not None:
             base = f'{self.scheme}://{base}'
         if self.port is not None:
@@ -133,15 +105,15 @@ class Host(Serializable):
         if match is None or match.group(4) is None:
             raise ValueError('Invalid URL', value)
 
-        self.scheme = match.group(3)
-        self.ip = match.group(5)
+        self.scheme = self.validate_scheme(match.group(3))
+        self.ip = self.validate_ip(match.group(5))
         self.domain = match.group(6)
-        self.port = match.group(9)
+        self.port = self.validate_port(match.group(9))
 
     def __str__(self) -> str:
         return self.base_url or ''
 
-def _request(url: str, raw_url: bool, headers, cookies, session, auth,
+def _request(url: str, raw_url: bool, headers, cookies, session: requests.Session|None, auth,
              allow_redirects: bool, verify: bool,
              retry_on_connection_error: bool,
              retry_on_unexpected_status_code: bool, 
@@ -179,8 +151,8 @@ def _request(url: str, raw_url: bool, headers, cookies, session, auth,
         # Even if we use a prepared request and override its URL,
         # when sending it the URL is still re-encoded by urllib3, so
         # we need to temporarily override this
-        o_normalizable_schemes = urllib3.util.url._NORMALIZABLE_SCHEMES
-        urllib3.util.url._NORMALIZABLE_SCHEMES = ()
+        o_normalizable_schemes = urllib3.util.url._NORMALIZABLE_SCHEMES     # type: ignore
+        urllib3.util.url._NORMALIZABLE_SCHEMES = ()     # type: ignore
 
     try:
         r = session.send(
@@ -189,7 +161,7 @@ def _request(url: str, raw_url: bool, headers, cookies, session, auth,
         )
 
         if raw_url:
-            urllib3.util.url._NORMALIZABLE_SCHEMES = o_normalizable_schemes
+            urllib3.util.url._NORMALIZABLE_SCHEMES = o_normalizable_schemes # type: ignore
 
         if not r.status_code in expected_status_codes:
             description = http.client.responses.get(r.status_code, 'Unknown')
@@ -214,7 +186,7 @@ def _request(url: str, raw_url: bool, headers, cookies, session, auth,
     return None
 
 def request_get(url: str, raw_url: bool = False, verbose: bool = True, 
-                headers=None, cookies=None, session=None, auth=None,
+                headers=None, cookies=None, session: requests.Session|None = None, auth=None,
                 allow_redirects: bool = True, verify: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
@@ -257,7 +229,7 @@ def request_get(url: str, raw_url: bool = False, verbose: bool = True,
     )
 
 def request_post(url: str, data, raw_url: bool = False, verbose: bool = True, 
-                headers=None, cookies=None, session=None, auth=None,
+                headers=None, cookies=None, session: requests.Session|None = None, auth=None,
                 allow_redirects: bool = True, verify: bool = True,
                 expected_status_codes: list[int] = [200, 302],
                 retry_on_connection_error: bool = True,
@@ -299,8 +271,10 @@ def request_post(url: str, data, raw_url: bool = False, verbose: bool = True,
         expected_status_codes=expected_status_codes
     )
 
-def socket_connection(host, port, requests: list[str] = [], udp: bool = False, 
-                      timeout: int = 3, decode_data: bool = True) -> list[str] | None:
+def socket_connection(
+        host: str, port: str|int, requests: list[str] = [],
+        udp: bool = False, timeout: int = 3, decode_data: bool = True
+    ) -> list[str|bytes]| None:
     socket_kind = socket.SOCK_STREAM
     if udp:
         socket_kind = socket.SOCK_DGRAM
@@ -317,7 +291,7 @@ def socket_connection(host, port, requests: list[str] = [], udp: bool = False,
         error(str(e))
         return None
     
-    result = []
+    result: list[str|bytes] = []
     for request in requests:
         debug(f"SOCKET: Sending {request.rstrip()}")
         s.send(request.encode())
