@@ -75,6 +75,7 @@ class UpdateMode(Enum):
 
 def CustomField(
         update_mode: UpdateMode = UpdateMode.REPLACE,
+        exclude_from_update: bool = False,
         print: bool = True,
         print_key: str|None = None,
         print_key_style: str = '[cyan]',
@@ -88,6 +89,7 @@ def CustomField(
     """
     extra = kwargs.get('json_schema_extra', {})
     extra['update_mode'] = update_mode
+    extra['exclude_from_update'] = exclude_from_update
     extra['print'] = print
     extra['print_key'] = print_key
     extra['print_key_style'] = print_key_style
@@ -115,11 +117,11 @@ class Serializable(BaseModel):
     """
     model_config = ConfigDict(strict=True, validate_assignment=True)
 
-    def update(self, other: 'Serializable', excluded: set[str] = set()):
-        """Updates the object with all the non-unset values from `other`,
-        except for those in `excluded`.
+    def update(self, other: 'Serializable'):
+        """Updates the object with all the non-unset values from `other`.
         
-        Fields will be updated according to their `UpdateMode`.
+        * Fields will be updated according to their `UpdateMode`.
+        * Fields with `exclude_from_update` set to `True` will be skipped.
         """
         if type(other) is not type(self):
             raise TypeError(
@@ -128,13 +130,13 @@ class Serializable(BaseModel):
             )
 
         for key, _ in other.model_dump(exclude_unset=True).items():
-            if key in excluded:
-                continue
-
             field = type(self).model_fields.get(key, None)
             extra: dict[str, Any] = {}
             if field is not None and hasattr(field, 'json_schema_extra'):
                 extra = field.json_schema_extra or {}  # type: ignore
+
+            if extra.get('exclude_from_update', False):
+                continue
 
             val = getattr(self, key)
             other_val = getattr(other, key)

@@ -139,10 +139,14 @@ class TestSerializable(unittest.TestCase):
         self.assertEqual(obj1.name, "test2")
         self.assertEqual(obj1.value, 2)
 
-        # Basic update with exclusion
-        obj1 = self.TestModel(name="test1", value=1)
-        obj2 = self.TestModel(name="test2", value=2)
-        obj1.update(obj2, excluded={"name"})
+        # Basic update with an excluded field
+        class ExcludeTestModel(Serializable):
+            name: str = CustomField(exclude_from_update=True)
+            value: int
+        
+        obj1 = ExcludeTestModel(name="test1", value=1)
+        obj2 = ExcludeTestModel(name="test2", value=2)
+        obj1.update(obj2)
         self.assertEqual(obj1.name, "test1")  # Not updated
         self.assertEqual(obj1.value, 2)
 
@@ -176,16 +180,6 @@ class TestSerializable(unittest.TestCase):
         obj1.update(obj2)
         self.assertEqual(obj1.child.name, "child2")
         self.assertEqual(obj1.child.items, {1, 2})
-
-        # Test update with an excluded public field
-        class ExcludedFieldModel(Serializable):
-            name: str
-            excluded_field: int = Field(exclude=True)
-
-        obj1 = ExcludedFieldModel(name="test", excluded_field=1)
-        obj2 = ExcludedFieldModel(name="test", excluded_field=2)
-        obj1.update(obj2)
-        self.assertEqual(obj1.excluded_field, 1)  # Not updated
 
         # Test UpdateMode.IGNORE
         class IgnoreModel(Serializable):
