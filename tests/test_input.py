@@ -180,6 +180,19 @@ class TestInput(unittest.TestCase):
         result = input_ints('Enter ints', [1, 2, 3])
         self.assertEqual(result, [1, 2, 3])
 
+        # Test ranges
+        mock_input.return_value = '1-3'
+        result = input_ints('Enter ints')
+        self.assertEqual(result, [1, 2, 3])
+
+        mock_input.return_value = '1-1'
+        result = input_ints('Enter ints')
+        self.assertEqual(result, [1])
+
+        mock_input.return_value = '1-3,5,8-9'
+        result = input_ints('Enter ints')
+        self.assertEqual(result, [1, 2, 3, 5, 8, 9])
+
         # Test min validation
         mock_input.side_effect = ['0,5', '', '2,3']
         result = input_ints('Enter ints', min=1)
@@ -209,6 +222,15 @@ class TestInput(unittest.TestCase):
         mock_input.return_value = ''
         result = input_floats('Enter floats', [1.1, 2.2, 3.3])
         self.assertEqual(result, [1.1, 2.2, 3.3])
+
+        # Test ranges
+        mock_input.return_value = '1-3'
+        result = input_floats('Enter floats')
+        self.assertEqual(result, [1.0, 2.0, 3.0])
+
+        mock_input.return_value = '1-3,5.6,8-9'
+        result = input_floats('Enter floats')
+        self.assertEqual(result, [1.0, 2.0, 3.0, 5.6, 8.0, 9.0])
 
         # Test min validation
         mock_input.side_effect = ['0.5,1.5', '', '1.2,2.3']

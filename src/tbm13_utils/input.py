@@ -290,36 +290,51 @@ def _input_numbers[T: int|float](
         values = input_strs(msg, fallback)
         if values == fallback:
             return fallback
-
+        
+        # Expand ranges (if any)
         for i, value in enumerate(values):  # type: ignore
+            value = value.strip()   # type: ignore
+            match = re.match(r'^(\d+)-(\d+)$', value)   # type: ignore
+            if match is not None:
+                try:
+                    start = int(match.group(1))
+                    end = int(match.group(2))
+                except ValueError:
+                    continue
+
+                if start > end:
+                    info_input(f'Invalid range: {value}')
+                    clear_last_line()
+                    break
+
+                values[i:i+1] = [str(x) for x in range(start, end + 1)] # type: ignore
+
+        res: list[T] = []
+        for value in values:  # type: ignore
             try:
-                result = type(value)        # type: ignore
+                result = type(value)    # type: ignore
             except ValueError:
-                values = None
                 break
 
             if min is not None and result < min:
                 info_input(f'Numbers can\'t be less than {min}')
                 clear_last_line()
-                values = None
                 break
             if max is not None and result > max:
                 info_input(f'Numbers can\'t be higher than {max}')
                 clear_last_line()
-                values = None
                 break
-            if accepted_values is not None and not result in accepted_values:
+            if accepted_values is not None and result not in accepted_values:
                 info_input(f'All numbers must be one of the following: {accepted_values}')
                 clear_last_line()
-                values = None
                 break
 
-            values[i] = result      # type: ignore
+            res.append(result)  # type: ignore
 
-        if values is None:
+        if len(res) == 0:
             continue
 
-        return values
+        return res
 
 @overload
 def input_int(msg: str, *, 
