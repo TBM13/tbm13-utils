@@ -58,10 +58,14 @@ def exception_input(exception: Exception, block: bool = True) -> int:
     print()
     printed_lines = 1
 
-    tb = traceback.extract_tb(exception.__traceback__)[-1]
+    tb = traceback.extract_tb(exception.__traceback__)
+    tb = tb[-1] if len(tb) > 0 else None
     args = exception.args
     msg = exception.__class__.__name__
-    details = tb.line or ''
+    if tb is not None:
+        details = tb.line or ''
+    else:
+        details = ''
     if len(exception.args) == 1:
         args = exception.args[0]
 
@@ -88,8 +92,11 @@ def exception_input(exception: Exception, block: bool = True) -> int:
             debug(repr(details))
             printed_lines += 1
 
-    filename = os.path.basename(tb.filename)
-    msg = f'Abort[darkgray]({tb.name}@{filename}:{tb.lineno})[red]: {msg}'
+    if tb is not None:
+        filename = os.path.basename(tb.filename)
+        msg = f'Abort[darkgray]({tb.name}@{filename}:{tb.lineno})[red]: {msg}'
+    else:
+        msg = f'Abort: {msg}'
     if block:
         error_input(msg)
     else:
