@@ -1,4 +1,5 @@
 import os
+import signal
 import subprocess
 import time
 from subprocess import CompletedProcess, Popen
@@ -65,35 +66,63 @@ def popen_as_root(args: list[str], **kwargs: Any) -> Popen[Any]:
 
 def run_and_print_output(print_func: Callable[[str], None],
                          args: list[str], root: bool = False,
+                         send_interrupt: bool = False,
                          **kwargs: Any) -> Popen[Any]:
     """Calls `subprocess.Popen` or `popen_as_root` if `root`
     is `True`, with `args` and `kwargs`.
-    
+
     Pipes both stdout and stderr, and every time the process writes
     a line to stdout, calls `print_func` with it.
-    """
 
+    * If `send_interrupt` is `True`, sends a SIGINT (or CTRL_BREAK_EVENT on Windows)
+    to the process when a KeyboardInterrupt occurs. The user will be forced
+    to wait for the process to exit.
+    """
     kwargs['stdout'] = subprocess.PIPE
     kwargs['stderr'] = subprocess.PIPE
     kwargs.setdefault('encoding', 'utf8')
+
+    # On Windows, SIGINT is not supported. We need to create the
+    # process in a new process group and send CTRL_BREAK_EVENT to it
+    if send_interrupt and os.name == 'nt':
+        kwargs.setdefault('creationflags', subprocess.CREATE_NEW_PROCESS_GROUP)
+        kwargs['creationflags'] |= subprocess.CREATE_NEW_PROCESS_GROUP
 
     if root:
         proc = popen_as_root(args, **kwargs)
     else:
         proc = subprocess.Popen(args, **kwargs)
 
-    try:
-        while 1:
-            line = proc.stdout.readline()  # type: ignore
-            if not line: 
-                if proc.poll() is not None:
-                    break
+    def read_loop(interrupt_sent: bool):
+        try:
+            for line in proc.stdout:  # type: ignore
+                print_func(line)
 
+            if interrupt_sent:
+                # Wait for the process to gracefully exit
                 proc.wait()
-                continue
+        except KeyboardInterrupt:
+            if interrupt_sent:
+                # Force user to wait for the process to
+                # gracefully handle the interrupt and exit
+                read_loop(True)
+                return
+            
+            # Send interrupt and wait for process to gracefully exit
+            if send_interrupt:
+                if os.name == 'nt':
+                    os.kill(proc.pid, signal.CTRL_BREAK_EVENT)
+                else:
+                    proc.send_signal(signal.SIGINT)
 
-            print_func(line)
+                read_loop(True)
+                proc.wait()
+            
+            raise KeyboardInterrupt
 
+    try:
+        read_loop(False)
+        proc.wait()
         return proc
     except KeyboardInterrupt:
         # Wait a little in order to prevent EOFError
