@@ -20,26 +20,15 @@ def get_terminal_columns(fallback: int) -> int:
     except Exception:
         return fallback
 
-def get_unique_file(file_path: str) -> str:
-    """Generates an unique file name for `file_path` and returns it.
-    
-    If `file_path` does not exist, returns it as-is.
-    Otherwise, appends a number to it.
+def get_unique_file(path: str) -> str:
+    """Generates an unique path based on `path` or
+    returns it as-is if it does not exist.
     """
-
-    base_name = os.path.basename(file_path)
-    extension_index = base_name.rfind('.')
-    if extension_index <= 0:
-        # Dot being at the start (e.g. on '.bashrc') counts as no extension
-        extension = ''
-    else:
-        extension = base_name[extension_index:]
-        file_path = file_path[:extension_index]
-
-    unique_path = file_path + extension
+    path, extension = os.path.splitext(path)
+    unique_path = path + extension
     i = 1
     while os.path.exists(unique_path):
-        unique_path = f"{file_path}_{i}{extension}"
+        unique_path = f"{path}_{i}{extension}"
         i += 1
     
     return unique_path
