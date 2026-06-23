@@ -1,5 +1,6 @@
 import math
 import platform
+import re
 import subprocess
 import sys
 from typing import Sequence, TextIO
@@ -208,6 +209,7 @@ def print_table(columns: dict[str, int],
         data = list(reversed(data))
 
     # Print data
+    ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
     for row in data:
         row_str = ''
 
@@ -217,13 +219,23 @@ def print_table(columns: dict[str, int],
                 elif length == -1:
                     continue
 
-                value = remove_style(row[i])
-                style = row[i].replace(value, '')
+                value = apply_style(row[i])
+                ansi_spans: dict[int, str] = {}
+                for match in ansi_escape.finditer(value):
+                    ansi_spans[match.start()] = match.group()
+
+                # Remove ANSI escape sequences
+                value = ansi_escape.sub('', value)
 
                 # Truncate value if needed
                 if len(value) > length:
                     value = value[:length - 3] + '...'
 
-                row_str += style + '{:<{}}'.format(value, length)
+                value = '{:<{}}'.format(value, length)
+                # Reinsert ANSI escape sequences
+                for pos, code in ansi_spans.items():
+                    value = value[:pos] + code + value[pos:]
+
+                row_str += value
 
         color_print(row_str)
