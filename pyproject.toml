@@ -25,6 +25,11 @@ dependencies = [
   "pydantic",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/TBM13/tbm13-utils"
 "Bug Tracker" = "https://github.com/TBM13/tbm13-utils/issues"
