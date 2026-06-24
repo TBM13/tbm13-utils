@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "tbm13_utils"
 version = "1.1"
 authors = [
-  { name="TBM13", email="mateo.trueba@gmail.com" },
+  { name="TBM13" },
 ]
-description = "Utils made for personal use"
+description = "Lib with various utilities for my projects"
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
@@ -19,20 +19,16 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Utilities",
 ]
+
 dependencies = [
   "requests",
   "filelock",
   "pydantic",
 ]
-
 [dependency-groups]
 dev = [
     "pytest>=9.1.0",
 ]
-
-[project.urls]
-"Homepage" = "https://github.com/TBM13/tbm13-utils"
-"Bug Tracker" = "https://github.com/TBM13/tbm13-utils/issues"
 
 [tool.pyright]
 typeCheckingMode = "strict"
@@ -40,3 +36,13 @@ typeCheckingMode = "strict"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "W", "UP", "B", "SIM", "C4", "N", "RUF",
+    "PIE", "PYI", "A", "ISC", "ICN", "INP001", "Q", "RSE",
+    "RET", "SLF", "SIM", "PERF", "PLC", "PLE", "PLW",
+    "FURB",
+
+    "PT"
+]
