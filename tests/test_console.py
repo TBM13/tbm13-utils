@@ -13,6 +13,7 @@ from tbm13_utils.console import (
     IntValidator,
     ListValidator,
     PathValidator,
+    RangeValidator,
     SelectionValidator,
     StringValidator,
     apply_style,
@@ -276,6 +277,33 @@ def test_float_validator(pt_input: PipeInput):
     # Accepted values
     pt_input.send_text(f"0\n{CLEAR_INPUT}4.5\n{CLEAR_INPUT}2.25\n")
     assert FloatValidator(accepted_values=[1.0, 2.25, 3.75]).input("") == 2.25
+
+
+def test_range_validator(pt_input: PipeInput):
+    pt_input.send_text("5\n")
+    assert RangeValidator().input("") == [5]
+    pt_input.send_text("5-5\n")
+    assert RangeValidator().input("") == [5]
+    pt_input.send_text("4-5\n")
+    assert RangeValidator().input("") == [4, 5]
+    pt_input.send_text("0-3\n")
+    assert RangeValidator().input("") == [0, 1, 2, 3]
+
+    # Malformed input followed by valid input
+    pt_input.send_text(f"invalid\n{CLEAR_INPUT}1\n")
+    assert RangeValidator().input("") == [1]
+    pt_input.send_text(f"1-3-5\n{CLEAR_INPUT}2\n")
+    assert RangeValidator().input("") == [2]
+    pt_input.send_text(f"3-\n{CLEAR_INPUT}1\n")
+    assert RangeValidator().input("") == [1]
+
+    # Min/max
+    pt_input.send_text(f"0-3\n{CLEAR_INPUT}5-10\n")
+    assert RangeValidator(min_value=5).input("") == [5, 6, 7, 8, 9, 10]
+    pt_input.send_text(f"5-10\n{CLEAR_INPUT}0-3\n")
+    assert RangeValidator(max_value=3).input("") == [0, 1, 2, 3]
+    pt_input.send_text(f"4-8\n{CLEAR_INPUT}5-10\n")
+    assert RangeValidator(min_value=5, max_value=10).input("") == [5, 6, 7, 8, 9, 10]
 
 
 def test_path_validator(pt_input: PipeInput, tmp_path: Path):

@@ -1,10 +1,12 @@
 from collections.abc import Callable
-from typing import Any, Concatenate
+from typing import Annotated, Any, Concatenate
 
+import annotated_types
 from typing_extensions import Sentinel
 
 __all__ = [
     "MISSING",
+    "NonNegativeInt",
     "inherits_args0",
     "inherits_args1",
     "inherits_args2",
@@ -13,6 +15,8 @@ __all__ = [
 
 MISSING = Sentinel("MISSING")
 """Represents a missing value."""
+type NonNegativeInt = Annotated[int, annotated_types.Ge(0)]
+"""An integer that must be greater than or equal to zero."""
 
 
 def inherits_signature[**P, R](target: Callable[P, R]):

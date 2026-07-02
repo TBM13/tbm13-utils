@@ -15,7 +15,7 @@ from prompt_toolkit.history import History, InMemoryHistory
 from prompt_toolkit.shortcuts import clear, set_title
 from prompt_toolkit.validation import ValidationError, Validator
 
-from .typing import inherits_args1
+from .typing import NonNegativeInt, inherits_args1
 
 __all__ = [
     "BaseValidator",
@@ -24,6 +24,7 @@ __all__ = [
     "IntValidator",
     "ListValidator",
     "PathValidator",
+    "RangeValidator",
     "SelectionValidator",
     "StringValidator",
     "apply_style",
@@ -649,6 +650,8 @@ class BaseValidator[T](Validator, ABC):
 
 
 class ListValidator[T](BaseValidator[list[T]]):
+    """Validates a list of items separated by a specified separator."""
+
     def __init__(
         self,
         item_validator: BaseValidator[T],
@@ -853,6 +856,75 @@ class IntValidator(NumberValidator[int]):
 
 class FloatValidator(NumberValidator[float]):
     type = float
+
+
+class RangeValidator(BaseValidator[list[NonNegativeInt]]):
+    """Validates integers and range of integers in the format `start-end`.
+
+    The integers cannot be negative.
+    """
+
+    def __init__(
+        self,
+        min_value: NonNegativeInt = 0,
+        max_value: NonNegativeInt | None = None,
+    ):
+        super().__init__()
+
+        if min_value < 0:
+            raise ValueError("min_value cannot be negative")
+
+        self.min_value = min_value
+        self.max_value = max_value
+
+    @override
+    def _validate(self, text: str):
+        parts = text.split("-")
+        if len(parts) > 2:
+            raise ValidationError(
+                message="Invalid range format. Use 'start-end'",
+                cursor_position=len(text),
+            )
+        is_range = len(parts) == 2
+        if len(parts) == 1:
+            # Treat single value as a range with the same start and end
+            parts.append(parts[0])
+
+        try:
+            start = int(parts[0])
+            end = int(parts[1])
+        except ValueError as ex:
+            raise ValidationError(
+                message="Invalid value" if not is_range else "Invalid range",
+                cursor_position=len(text),
+            ) from ex
+
+        if start > end:
+            raise ValidationError(
+                message="The range's end cannot be less than its start",
+                cursor_position=len(text),
+            )
+
+        if start < self.min_value or (
+            self.max_value is not None and end > self.max_value
+        ):
+            name = "range" if is_range else "value"
+            raise ValidationError(
+                message=(
+                    f"The {name} must be between {self.min_value} and {self.max_value}"
+                ),
+                cursor_position=len(text),
+            )
+
+    @override
+    def _parse(self, user_input: str) -> list[NonNegativeInt]:
+        parts = user_input.split("-")
+        if len(parts) == 1:
+            value = int(parts[0])
+            return [value]
+
+        start, end = int(parts[0]), int(parts[1])
+        return [*range(start, end + 1)]
 
 
 class PathValidator(BaseValidator[str]):
