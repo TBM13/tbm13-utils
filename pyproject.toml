@@ -21,17 +21,21 @@ classifiers = [
 ]
 
 dependencies = [
-  "requests",
-  "filelock",
-  "pydantic",
+  "requests >= 2.34.2, < 3.0.0",
+  "filelock >= 3.29.4, < 4.0.0",
+  "pydantic >= 2.13.4, < 3.0.0",
+  "prompt-toolkit >= 3.0.52, < 4.0.0",
+  "typing-extensions >= 4.15.0, < 5.0.0",
 ]
 [dependency-groups]
 dev = [
-    "pytest>=9.1.0",
+    "pytest==9.1.1",
 ]
 
 [tool.pyright]
 typeCheckingMode = "strict"
+# Enable experimental support for Sentinel values (PEP 661)
+enableExperimentalFeatures = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
@@ -40,9 +44,11 @@ testpaths = ["tests"]
 [tool.ruff.lint]
 select = [
     "E", "F", "I", "W", "UP", "B", "SIM", "C4", "N", "RUF",
-    "PIE", "PYI", "A", "ISC", "ICN", "INP001", "Q", "RSE",
-    "RET", "SLF", "SIM", "PERF", "PLC", "PLE", "PLW",
-    "FURB",
+    "PIE", "PYI", "ISC", "ICN", "INP001", "Q", "RSE",
+    "RET", "SIM", "PERF", "PLC", "PLE", "PLW", "FURB",
 
     "PT"
+]
+ignore = [
+    "PLW2901", # redefined-loop-name
 ]

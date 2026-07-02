@@ -1,46 +1,55 @@
 import contextlib
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from .display import *
-from .input import *
+from .console import ask, clear_lines, debug, exception
 
 __all__ = [
-    'ReturnInterrupt', 'RetryInterrupt',
-    'handle_exceptions', 'call_retriable_func'
+    "RetryInterrupt",
+    "ReturnInterrupt",
+    "call_retriable_func",
+    "handle_exceptions",
 ]
 
-class ReturnInterrupt[T](Exception):
+
+class ReturnInterrupt[T](Exception):  # noqa: N818
     def __init__(self, return_value: T):
         self.return_value = return_value
 
-class RetryInterrupt(Exception):
+
+class RetryInterrupt(Exception):  # noqa: N818
     pass
+
 
 @contextlib.contextmanager
 def handle_exceptions(block: bool = True):
     """Wraps the code in a try-except block that catches
     and prints any exception that occurs.
-    
+
     If `block` is True (default), the user will have to
     press ENTER to continue after the exception is printed,
     and the printed lines will be cleared after.
     """
     try:
         yield
-    except (ReturnInterrupt, RetryInterrupt) as e:   # type: ignore
+    except (ReturnInterrupt, RetryInterrupt) as e:  # type: ignore
         raise e
     except Exception as e:
-        printed_lines = exception_input(e, block)
+        printed_lines = exception(e, block=block)
         if block:
-            for _ in range(printed_lines):
-                clear_last_line()
+            clear_lines(printed_lines)
 
-def call_retriable_func(func: Callable[..., Any], max_retries: int = -1, 
-                        wait_between_retries: float = 0.2,
-                        wait_multiplier: float = 1,
-                        max_wait: float = -1,
-                        *args: Any, **kwargs: Any):
+
+def call_retriable_func[R](
+    func: Callable[..., R],
+    max_retries: int = -1,
+    wait_between_retries: float = 0.2,
+    wait_multiplier: float = 1,
+    max_wait: float = -1,
+    *args: Any,
+    **kwargs: Any,
+) -> R | None:
     """Calls `func` with `args` and `kwargs`, and recalls it whenever
     it raises `RetryInterrupt` up to `max_retries` times
     (or infinitely if `max_retries` is negative).
@@ -55,30 +64,30 @@ def call_retriable_func(func: Callable[..., Any], max_retries: int = -1,
     def retries_remaining() -> int:
         return max_retries - retries_count + 1
 
-    while 1:
+    while True:
         try:
             try:
                 return func(*args, **kwargs)
             except RetryInterrupt:
                 if retries_count == max_retries:
-                    return
-                
+                    return None
+
                 retries_count += 1
-                msg = 'Retrying'
+                msg = "Retrying"
 
                 if wait_between_retries > 0:
                     if max_wait > 0 and wait_between_retries > max_wait:
                         wait_between_retries = max_wait
 
-                    msg += f' in {wait_between_retries} seconds'
+                    msg += f" in {wait_between_retries} seconds"
                     if max_retries > 0:
-                        msg += f'. {retries_remaining()} retries remaining'
+                        msg += f". {retries_remaining()} retries remaining"
 
-                    debug(f'{msg}...')
+                    debug(f"{msg}...")
                     time.sleep(wait_between_retries)
                     wait_between_retries *= wait_multiplier
                 else:
-                    debug(f'{msg}...')
+                    debug(f"{msg}...")
         except KeyboardInterrupt:
             # Wait a little in order to prevent EOFError
             time.sleep(0.1)
@@ -86,13 +95,13 @@ def call_retriable_func(func: Callable[..., Any], max_retries: int = -1,
             # No retries happened so no need to ask anything,
             # as user just wants to abort the execution of func()
             if retries_count == 0:
-                return
+                return None
 
-            # Lets ask just in case, user may want to pause the operation 
+            # Lets ask just in case, user may want to pause the operation
             # to fix whatever is causing it to fail
             try:
-                if ask(f'{retries_remaining()} retries remaining. Abort?', True):
-                    return
+                if ask(f"{retries_remaining()} retries remaining. Abort?", True):
+                    return None
             except (KeyboardInterrupt, EOFError):
                 print()
-                return
+                return None

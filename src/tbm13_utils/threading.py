@@ -4,21 +4,24 @@ import statistics
 import threading
 import time
 from abc import ABC, abstractmethod
-from typing import Sequence, Type
+from collections.abc import Sequence
 
-from .display import *
-from .encoding import *
-from .flow import *
+from .console import debug, error, info, success
+from .encoding import Serializable
 
 __all__ = [
-    'WorkerStatus', 'BaseWorker', 'WorkerSession'
+    "BaseWorker",
+    "WorkerSession",
+    "WorkerStatus",
 ]
+
 
 class WorkerStatus(enum.IntEnum):
     """Lower statuses have higher priority.
-    
+
     Less than 0 means the worker aborted.
     """
+
     ABORT_FINISHED = -3
     ABORT_ERROR = -2
     ABORT_USER = -1
@@ -26,31 +29,36 @@ class WorkerStatus(enum.IntEnum):
     WORKING = 1
     FINISHED_ALL_WORK = 2
 
+
 class BaseWorker[T](threading.Thread, ABC):
     def __init__(self, id: int):
-        super(BaseWorker, self).__init__()
+        super().__init__()
 
         self.id = id
         self._status: WorkerStatus = WorkerStatus.NOT_STARTED
-        self._work: Sequence[T]|None = None
+        self._work: Sequence[T] | None = None
         self._work_index: int = 0
 
         # Stats
-        self.work_execution_times: collections.deque[float] = collections.deque(maxlen=10)
+        self.work_execution_times: collections.deque[float] = collections.deque(
+            maxlen=10
+        )
 
     @property
     def status(self) -> WorkerStatus:
         return self._status
+
     @property
-    def work(self) -> Sequence[T]|None:
+    def work(self) -> Sequence[T] | None:
         return self._work
+
     @property
     def work_index(self) -> int:
         return self._work_index
 
     def prepare(self, work: Sequence[T], start_index: int = 0):
         """Must be called before starting the worker.
-        
+
         Once the worker starts, it will work on the elements of `work`
         starting from `start_index` and the status will be set to `WORKING`.
 
@@ -63,9 +71,9 @@ class BaseWorker[T](threading.Thread, ABC):
         and the worker will abort.
         """
         if not 0 <= start_index < len(work):
-            raise ValueError('Invalid start index', start_index)
+            raise ValueError("Invalid start index", start_index)
         if self._status == WorkerStatus.WORKING:
-            raise Exception('Can\'t call prepare while working', self.id)
+            raise Exception("Can't call prepare while working", self.id)
 
         self._work = work
         self._work_index = start_index
@@ -77,35 +85,37 @@ class BaseWorker[T](threading.Thread, ABC):
         """
         if self._status == WorkerStatus.WORKING:
             self._status = WorkerStatus.ABORT_USER
-        
+
         printed = False
         while self.is_alive():
             if not printed:
-                info(f'Waiting for worker {self.id} to exit')
+                info(f"Waiting for worker {self.id} to exit")
                 printed = True
 
             time.sleep(0.1)
 
     def run(self):
         if self._work is None:
-            raise Exception('prepare() must be called before starting the worker', self.id)
+            raise Exception(
+                "prepare() must be called before starting the worker", self.id
+            )
 
         id_s = str(self.id).zfill(2)
         self._status = WorkerStatus.WORKING
         last_time = time.time()
         while self._status == WorkerStatus.WORKING:
             if len(self._work) <= self._work_index:
-                info(f'[w{id_s}] Finished all work')
+                info(f"[w{id_s}] Finished all work")
                 self._status = WorkerStatus.FINISHED_ALL_WORK
                 break
 
             try:
                 if self._do_work(self._work[self._work_index]):
-                    success(f'[w{id_s}] Finished work earlier')
+                    success(f"[w{id_s}] Finished work earlier")
                     self._status = WorkerStatus.ABORT_FINISHED
                     break
             except Exception as e:
-                error(f'[w{id_s}] Abort: {e}')
+                error(f"[w{id_s}] Abort: {e}")
                 self._status = WorkerStatus.ABORT_ERROR
                 break
 
@@ -117,12 +127,13 @@ class BaseWorker[T](threading.Thread, ABC):
     @abstractmethod
     def _do_work(self, elem: T) -> bool:
         """Must be implemented by subclasses.
-        
+
         Optionally return `True` to abort and set the status to
         `ABORT_FINISHED` to signal that the worker was able to
         finish earlier. This is used by the `WorkerSession` class.
         """
-        raise NotImplementedError()
+        raise NotImplementedError
+
 
 class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
     """Facilitates the management of multiple workers working on the same work.
@@ -137,13 +148,16 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
         work index for each worker. Its length defines the amount of workers that
         will be used. If you don't have any checkpoints, the values should be `0`.
     """
+
     work_hash: str
     workers_checkpoints: list[int]
 
-    def run(self, worker_type: Type[W], work: Sequence[T]) -> tuple[WorkerStatus, list[W]]:
+    def run(
+        self, worker_type: type[W], work: Sequence[T]
+    ) -> tuple[WorkerStatus, list[W]]:
         """Prepares & starts the workers to work on the given work,
         starting from the checkpoints saved on this session.
-        
+
         Returns a tuple with the final status and the list of workers.
 
         The final status will be `ABORT_X` if any worker aborted or
@@ -152,21 +166,19 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
         doing all the work.
         """
         if len(self.workers_checkpoints) == 0:
-            raise Exception('No workers checkpoints loaded')
+            raise Exception("No workers checkpoints loaded")
         if len(work) == 0:
-            raise Exception('No work given')
-        
+            raise Exception("No work given")
+
         workers_num = len(self.workers_checkpoints)
         # Split work between workers
         work_dic: dict[int, list[T]] = {}
-        worker_i = 0
-        for e in work:
+        for worker_i, e in enumerate(work):
             work_dic.setdefault(worker_i % workers_num, []).append(e)
-            worker_i += 1
 
         # Create & start workers
         workers: list[W] = []
-        debug(f'Begin worker session ({workers_num} workers)')
+        debug(f"Begin worker session ({workers_num} workers)")
         for i in range(workers_num):
             worker = worker_type(i)
             workers.append(worker)
@@ -174,7 +186,7 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
             worker.prepare(work_dic[i], self.workers_checkpoints[i])
             worker.start()
 
-        global_status: WorkerStatus|None = None
+        global_status: WorkerStatus | None = None
         last_stats_print = time.time()
         try:
             while 1:
@@ -194,9 +206,9 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
                     if len(w.work_execution_times) > 0:
                         average = statistics.mean(w.work_execution_times)
                         work_per_second += 1 / average
-                
+
                 # Either a worker aborted (status < 0) or all workers finished all work
-                if global_status < 0 or global_status == WorkerStatus.FINISHED_ALL_WORK:    # type: ignore
+                if global_status < 0 or global_status == WorkerStatus.FINISHED_ALL_WORK:  # type: ignore
                     break
 
                 # Print stats every 4 seconds & save progress
@@ -207,19 +219,19 @@ class WorkerSession[T, W: BaseWorker[T]](Serializable):  # type: ignore
                     work_per_second = work_per_second or 0.0001
                     remaining = (len(work) - total_work_done) / work_per_second / 60
                     info(
-                        f'[darkgray]Progress: [0]{round(progress)}% '
-                        f'[darkgray]Work p/second: [0]{round(work_per_second, 2)} '
-                        f'[darkgray]Remaining time: [0]{round(remaining, 1)}m'
+                        f"[darkgray]Progress: [0]{round(progress)}% "
+                        f"[darkgray]Work p/second: [0]{round(work_per_second, 2)} "
+                        f"[darkgray]Remaining time: [0]{round(remaining, 1)}m"
                     )
         except KeyboardInterrupt:
             global_status = WorkerStatus.ABORT_USER
 
         # Signal abort to all workers
         for w in workers:
-            w._status = WorkerStatus.ABORT_USER     # type: ignore
+            w._status = WorkerStatus.ABORT_USER  # type: ignore
         # Wait for all workers to exit
         for w in workers:
-            info(f'Waiting for w{w.id} to exit')
+            info(f"Waiting for w{w.id} to exit")
             w.join()
 
-        return global_status, workers   # type: ignore
+        return global_status, workers  # type: ignore

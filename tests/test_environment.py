@@ -2,8 +2,6 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from tbm13_utils.environment import (
     get_unique_path,
     open_unique_file,

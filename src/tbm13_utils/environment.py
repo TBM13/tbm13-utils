@@ -1,5 +1,4 @@
 import os
-import shutil
 import signal
 import subprocess
 import time
@@ -9,18 +8,12 @@ from subprocess import CompletedProcess, Popen
 from typing import IO, Any, BinaryIO, Literal, TextIO, overload
 
 __all__ = [
-    "get_terminal_columns",
     "get_unique_path",
     "open_unique_file",
     "popen_as_root",
     "run_and_print_output",
     "run_as_root",
 ]
-
-
-def get_terminal_columns(fallback: int) -> int:
-    """Returns the number of columns in the terminal or `fallback`."""
-    return shutil.get_terminal_size(fallback=(fallback, 20)).columns
 
 
 def get_unique_path(path: str | Path) -> Path:
@@ -91,8 +84,6 @@ def open_unique_file(
             return (file_handle, current_path)
         except FileExistsError:
             i += 1
-
-        run_as_root(["asd"], text=False)
 
 
 def run_as_root(args: list[str], **kwargs: Any) -> CompletedProcess[Any]:
