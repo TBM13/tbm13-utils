@@ -8,11 +8,11 @@ from collections.abc import Callable, Container, Sequence
 from datetime import date
 from typing import Any, TextIO, final, override
 
+import prompt_toolkit.shortcuts
 from prompt_toolkit import ANSI, PromptSession, print_formatted_text
 from prompt_toolkit.application import get_app_session
 from prompt_toolkit.document import Document
 from prompt_toolkit.history import History, InMemoryHistory
-from prompt_toolkit.shortcuts import clear, set_title
 from prompt_toolkit.validation import ValidationError, Validator
 
 from .typing import NonNegativeInt, inherits_args1
@@ -143,6 +143,18 @@ def get_terminal_columns() -> int:
 def get_terminal_rows() -> int:
     """Gets the current number of rows in the terminal."""
     return get_app_session().output.get_size().rows
+
+
+def clear():
+    """Clears the terminal."""
+
+    output = get_app_session().output
+    output.erase_screen()
+    # Erase_screen does nothing on Windows Terminal so also use ANSI
+    # codes to clear the visible viewport and scrollback buffer
+    output.write_raw("\x1b[2J\x1b[3J")
+    output.cursor_goto(0, 0)
+    output.flush()
 
 
 def clear_lines(amount: int):
@@ -388,7 +400,7 @@ def print_title(subtitle: str = "", separator: str = "=", style: str = "[cyan]")
     if subtitle:
         full_title += subtitle
 
-    set_title(full_title)
+    prompt_toolkit.shortcuts.set_title(full_title)
 
     columns = get_terminal_columns()
     print_separator(separator, style)
