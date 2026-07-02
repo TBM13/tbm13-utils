@@ -579,7 +579,7 @@ class BaseValidator[T](Validator, ABC):
         """
         if len(args) > 0 and (
             (not isinstance(args[-1], str))
-            or (len(args[-1]) > 0 and args[-1][-1].isalnum())
+            or (len(args[-1]) > 0 and (args[-1][-1].isalnum() or args[-1][-1] == ")"))
         ):
             args = (*args[:-1], str(args[-1]) + ": ")
 
