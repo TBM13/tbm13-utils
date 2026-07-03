@@ -541,7 +541,8 @@ def get_selection_from_table(
     columns: dict[str, int],
     options: list[list[str]],
     prompt: str = "\n[darkgray]Please select an option",
-    commands: dict[re.Pattern[str], Callable[[re.Match[str]], None]] | None = None,
+    commands: dict[re.Pattern[str], Callable[[re.Match[str]], int | None]]
+    | None = None,
     invert_print_order: bool = False,
 ) -> int:
     """Prints all the options in a table and asks the user to select one of them.
@@ -575,9 +576,11 @@ class BaseValidator[T](Validator, ABC):
     def __init__(self):
         super().__init__()
 
-        self.commands: dict[re.Pattern[str], Callable[[re.Match[str]], Any]] = {}
+        self.commands: dict[re.Pattern[str], Callable[[re.Match[str]], T | None]] = {}
         """When the user input matches the pattern, the corresponding
         function will be executed instead of validating and parsing the input.
+
+        If the function returns a value, it will be returned as the input result.
 
         Only applies when using the `input()` method of this validator.
         """
@@ -609,7 +612,7 @@ class BaseValidator[T](Validator, ABC):
 
     def __match_command(
         self, user_input: str
-    ) -> tuple[Callable[[re.Match[str]], Any], re.Match[str]] | None:
+    ) -> tuple[Callable[[re.Match[str]], T | None], re.Match[str]] | None:
         """Tries to match the user input against all registered commands."""
         for pattern, func in self.commands.items():
             match = pattern.fullmatch(user_input)
@@ -621,8 +624,8 @@ class BaseValidator[T](Validator, ABC):
     @final
     def validate(self, document: Document):
         # If the input is a command, do not proceed with validation
-        if self.__match_command(document.text) is None:
-            text = document.text or self.__default
+        text = document.text or self.__default
+        if self.__match_command(text) is None:
             try:
                 self._validate(text)
             except ValidationError as e:
@@ -653,7 +656,9 @@ class BaseValidator[T](Validator, ABC):
             cmd_match = self.__match_command(user_input)
             if cmd_match is not None:
                 func, match = cmd_match
-                func(match)
+                result = func(match)
+                if result is not None:
+                    return result
                 continue
 
             break

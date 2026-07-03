@@ -193,6 +193,46 @@ def test_string_validator(pt_input: PipeInput):
     assert StringValidator(min_len=1, max_len=1).input("", default="def") == "a"
 
 
+def test_int_validator(pt_input: PipeInput):
+    pt_input.send_text("123\n")
+    assert IntValidator().input("") == 123
+    pt_input.send_text("\n")
+    assert IntValidator().input("", default="456") == 456
+    pt_input.send_text(f"invalid\n{CLEAR_INPUT}123\n")
+    assert IntValidator().input("", default="456") == 123
+
+    # Min/max value
+    pt_input.send_text(f"0\n{CLEAR_INPUT}1\n{CLEAR_INPUT}22\n{CLEAR_INPUT}100\n")
+    assert IntValidator(min=100).input("") == 100
+    pt_input.send_text(f"101\n{CLEAR_INPUT}100\n")
+    assert IntValidator(max=100).input("") == 100
+
+    # Accepted values
+    pt_input.send_text(f"0\n{CLEAR_INPUT}4\n{CLEAR_INPUT}2\n")
+    assert IntValidator(accepted_values=[1, 2, 3]).input("") == 2
+
+
+def test_float_validator(pt_input: PipeInput):
+    pt_input.send_text("123.45\n")
+    assert FloatValidator().input("") == 123.45
+    pt_input.send_text("123\n")
+    assert FloatValidator().input("") == 123
+    pt_input.send_text("\n")
+    assert FloatValidator().input("", default="456.78") == 456.78
+    pt_input.send_text(f"invalid\n{CLEAR_INPUT}123.45\n")
+    assert FloatValidator().input("", default="456.78") == 123.45
+
+    # Min/max value
+    pt_input.send_text(f"0\n{CLEAR_INPUT}100.5\n")
+    assert FloatValidator(min=100.5).input("") == 100.5
+    pt_input.send_text(f"101.25\n{CLEAR_INPUT}100.5\n")
+    assert FloatValidator(max=100.5).input("") == 100.5
+
+    # Accepted values
+    pt_input.send_text(f"0\n{CLEAR_INPUT}4.5\n{CLEAR_INPUT}2.25\n")
+    assert FloatValidator(accepted_values=[1.0, 2.25, 3.75]).input("") == 2.25
+
+
 def test_validator_commands(pt_input: PipeInput):
     """Tests that commands are correctly matched, executed, and bypass validation."""
 
@@ -238,45 +278,17 @@ def test_validator_commands(pt_input: PipeInput):
     assert strict_validator.input("") == "valid_long_string_here"
     assert shortcut_called is True
 
+    # Test that commands' return value is returned by the input method
+    def command_returning_value(match: re.Match[str]) -> int:
+        return -99
 
-def test_int_validator(pt_input: PipeInput):
-    pt_input.send_text("123\n")
-    assert IntValidator().input("") == 123
+    validator = IntValidator(min=0)
+    validator.commands[re.compile(r":return")] = command_returning_value
+    pt_input.send_text(":return\n")
+    assert validator.input("") == -99
+    # With default value
     pt_input.send_text("\n")
-    assert IntValidator().input("", default="456") == 456
-    pt_input.send_text(f"invalid\n{CLEAR_INPUT}123\n")
-    assert IntValidator().input("", default="456") == 123
-
-    # Min/max value
-    pt_input.send_text(f"0\n{CLEAR_INPUT}1\n{CLEAR_INPUT}22\n{CLEAR_INPUT}100\n")
-    assert IntValidator(min=100).input("") == 100
-    pt_input.send_text(f"101\n{CLEAR_INPUT}100\n")
-    assert IntValidator(max=100).input("") == 100
-
-    # Accepted values
-    pt_input.send_text(f"0\n{CLEAR_INPUT}4\n{CLEAR_INPUT}2\n")
-    assert IntValidator(accepted_values=[1, 2, 3]).input("") == 2
-
-
-def test_float_validator(pt_input: PipeInput):
-    pt_input.send_text("123.45\n")
-    assert FloatValidator().input("") == 123.45
-    pt_input.send_text("123\n")
-    assert FloatValidator().input("") == 123
-    pt_input.send_text("\n")
-    assert FloatValidator().input("", default="456.78") == 456.78
-    pt_input.send_text(f"invalid\n{CLEAR_INPUT}123.45\n")
-    assert FloatValidator().input("", default="456.78") == 123.45
-
-    # Min/max value
-    pt_input.send_text(f"0\n{CLEAR_INPUT}100.5\n")
-    assert FloatValidator(min=100.5).input("") == 100.5
-    pt_input.send_text(f"101.25\n{CLEAR_INPUT}100.5\n")
-    assert FloatValidator(max=100.5).input("") == 100.5
-
-    # Accepted values
-    pt_input.send_text(f"0\n{CLEAR_INPUT}4.5\n{CLEAR_INPUT}2.25\n")
-    assert FloatValidator(accepted_values=[1.0, 2.25, 3.75]).input("") == 2.25
+    assert validator.input("", default=":return") == -99
 
 
 def test_range_validator(pt_input: PipeInput):
