@@ -27,44 +27,42 @@ def pt_input():
         yield pipe_input
 
 
+class TestModel(Serializable):
+    name: str
+    value: int = 0
+
+
+class TestModel2(TestModel):
+    surname: str
+    _some_private_field: str = "private"
+
+
 class TestSerializable:
-    def setUp(self):
-        class TestModel(Serializable):
-            name: str
-            value: int = 0
-
-        class TestModel2(TestModel):
-            surname: str
-            _some_private_field: str = "private"
-
-        self.TestModel = TestModel
-        self.TestModel2 = TestModel2
-
     def test_model_creation(self):
-        obj = self.TestModel(name="test")
+        obj = TestModel(name="test")
         assert obj.name == "test"
         assert obj.value == 0
 
-        obj = self.TestModel(name="test", value=42)
+        obj = TestModel(name="test", value=42)
         assert obj.name == "test"
         assert obj.value == 42
         obj.name = "changed"
         assert obj.name == "changed"
 
         with pytest.raises(Exception):
-            obj = self.TestModel2(name="test")  # type: ignore - Missing surname
+            obj = TestModel2(name="test")  # type: ignore - Missing surname
 
-        obj = self.TestModel2(name="test", surname="user")
+        obj = TestModel2(name="test", surname="user")
         assert obj.name == "test"
         assert obj.surname == "user"
         assert obj._some_private_field == "private"  # type: ignore
 
     def test_equality(self):
         # Basic equality
-        obj1 = self.TestModel(name="test")
-        obj2 = self.TestModel(name="test", value=0)
-        obj3 = self.TestModel(name="test", value=2)
-        obj4 = self.TestModel(name="asd")
+        obj1 = TestModel(name="test")
+        obj2 = TestModel(name="test", value=0)
+        obj3 = TestModel(name="test", value=2)
+        obj4 = TestModel(name="asd")
         assert obj1 == obj2
         assert obj1 != obj3
         assert obj1 != obj4
@@ -86,7 +84,7 @@ class TestSerializable:
             counter += 1
             return counter
 
-        class TestModelChild(self.TestModel):
+        class TestModelChild(TestModel):
             _internal_id: int = PrivateAttr(default_factory=get_next)
 
         child1 = TestModelChild(name="test")
@@ -171,8 +169,8 @@ class TestSerializable:
 
     def test_update(self):
         # Basic update
-        obj1 = self.TestModel(name="test1", value=1)
-        obj2 = self.TestModel(name="test2", value=2)
+        obj1 = TestModel(name="test1", value=1)
+        obj2 = TestModel(name="test2", value=2)
         obj1.update(obj2)
         assert obj1.name == "test2"
         assert obj1.value == 2
@@ -286,26 +284,26 @@ class TestSerializable:
             obj1.update(obj2)
 
     def test_repr(self):
-        obj = self.TestModel(name="test", value=42)
+        obj = TestModel(name="test", value=42)
         expected = "TestModel({'name': 'test', 'value': 42})"
         assert repr(obj) == expected
 
-        obj2 = self.TestModel(name="test")
+        obj2 = TestModel(name="test")
         expected2 = "TestModel({'name': 'test'})"
         assert repr(obj2) == expected2
 
-        obj3 = self.TestModel2(name="test", surname="user", value=10)
+        obj3 = TestModel2(name="test", surname="user", value=10)
         expected3 = "TestModel2({'name': 'test', 'value': 10, 'surname': 'user'})"
         assert repr(obj3) == expected3
 
     def test_print(self):
         # Basic print - just test that it doesn't raise an exception
-        obj = self.TestModel(name="test", value=42)
+        obj = TestModel(name="test", value=42)
         obj.print()
 
         # Print with object comparison
-        obj1 = self.TestModel(name="test", value=1)
-        obj2 = self.TestModel(name="test", value=2)
+        obj1 = TestModel(name="test", value=1)
+        obj2 = TestModel(name="test", value=2)
         obj1.print(other=obj2)
 
 
