@@ -515,7 +515,7 @@ def ask(question: str, yes_default: bool = False) -> bool:
     If `yes_default` is `True`, yes will be selected
     when the user doesn't input anything.
     """
-    postfix = " [cyan]" + ("[Y/n]" if yes_default else "[y/N]")
+    postfix = " [cyan]" + ("[Y/n]" if yes_default else "[y/N]") + " "
     text = apply_style(
         format_text(
             question,
