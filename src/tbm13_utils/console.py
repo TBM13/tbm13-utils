@@ -202,6 +202,7 @@ def color_input(
     # Other
     history: History | None = None,
     show_frame: bool = False,
+    erase_when_done: bool = False,
 ):
     """Formats the given values, applies style to them
     and asks the user to input a string using them as the prompt.
@@ -217,6 +218,8 @@ def color_input(
                              when the user starts typing.
     :param history: The input history. If `None`, a default history is used.
     :param show_frame: If `True`, shows a frame around the input line.
+    :param erase_when_done: If `True`, erases everything printed by this function
+                            when the user inputs a value.
     """
     return _color_input(
         *values,
@@ -229,6 +232,7 @@ def color_input(
         default_editable=default_editable,
         history=history,
         show_frame=show_frame,
+        erase_when_done=erase_when_done,
     )
 
 
@@ -248,6 +252,7 @@ def _color_input(
     history: History | None = None,
     show_frame: bool = False,
     validator: Validator | None = None,
+    erase_when_done: bool = False,
 ) -> str:
     lprompt = apply_style(format_text(*values, sep=sep, prefix=prefix) + postfix)
     if rprompt:
@@ -261,7 +266,9 @@ def _color_input(
 
     # Avoid using a shared session since styles might be preserved between
     # different prompts
-    session: PromptSession[str] = PromptSession(history=history or _default_history)
+    session: PromptSession[str] = PromptSession(
+        history=history or _default_history, erase_when_done=erase_when_done
+    )
 
     res = session.prompt(
         ANSI(lprompt),
