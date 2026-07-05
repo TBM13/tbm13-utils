@@ -1,15 +1,13 @@
-import contextlib
 import time
 from collections.abc import Callable
 from typing import Any
 
-from .console import ask, clear_lines, debug, exception
+from .console import ask, debug
 
 __all__ = [
     "RetryInterrupt",
     "ReturnInterrupt",
     "call_retriable_func",
-    "handle_exceptions",
 ]
 
 
@@ -20,25 +18,6 @@ class ReturnInterrupt[T](Exception):  # noqa: N818
 
 class RetryInterrupt(Exception):  # noqa: N818
     pass
-
-
-@contextlib.contextmanager
-def handle_exceptions(block: bool = True):
-    """Wraps the code in a try-except block that catches
-    and prints any exception that occurs.
-
-    If `block` is True (default), the user will have to
-    press ENTER to continue after the exception is printed,
-    and the printed lines will be cleared after.
-    """
-    try:
-        yield
-    except (ReturnInterrupt, RetryInterrupt) as e:  # type: ignore
-        raise e
-    except Exception as e:
-        printed_lines = exception(e, block=block)
-        if block:
-            clear_lines(printed_lines)
 
 
 def call_retriable_func[R](
