@@ -2,6 +2,7 @@ import copy
 import math
 import os
 import re
+import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Container, Sequence
 from datetime import date
@@ -306,6 +307,13 @@ class PrintableError(Exception):
         self.message = message
         self.args = args
 
+    def _on_print(self):
+        """Called when the exception is about to be printed.
+
+        Override this to perform any actions before the exception
+        is printed (e.g. preparing the exception args).
+        """
+
     @overload
     def print(self, prefix: str = "\nAbort", block: Literal[False] = False) -> None: ...
     @overload
@@ -315,32 +323,38 @@ class PrintableError(Exception):
         block: Literal[True] = True,
         erase_when_done: bool = False,
     ) -> None: ...
+    @final
     def print(
         self,
         prefix: str = "\nAbort",
         block: bool = False,
         erase_when_done: bool = False,
     ):
-        if prefix and (prefix[-1].isalnum() or prefix[-1] in ")]"):
-            prefix += ": "
+        self._on_print()
 
         exceptions: list[PrintableError] = [self]
         while isinstance(exceptions[-1].__cause__, PrintableError):
             exceptions.append(exceptions[-1].__cause__)
+            exceptions[-1]._on_print()
 
         # If the prefix has newlines, they need to be printed first
         original_prefix = prefix
         prefix = prefix.lstrip("\n")
         full_msg = "\n" * (len(original_prefix) - len(prefix))
 
-        for i, e in enumerate(reversed(exceptions)):
+        for i in range(len(exceptions) - 1, -1, -1):
+            e = exceptions[i]
+            if i == len(exceptions) - 1 and e.__cause__ is not None:
+                cause_traceback = "".join(traceback.format_exception(e.__cause__))
+                full_msg += "[darkgray]" + cause_traceback + "\n"
+
             # Find the place in the code where the exception was raised
             tb = e.__traceback__
             while tb and tb.tb_next:
                 tb = tb.tb_next
 
             if tb is not None:
-                file_name = tb.tb_frame.f_code.co_filename
+                file_name = os.path.basename(tb.tb_frame.f_code.co_filename)
                 func_name = tb.tb_frame.f_code.co_name
                 line_number = tb.tb_lineno
             else:
@@ -351,15 +365,15 @@ class PrintableError(Exception):
             short_args: list[str] = []
             for arg_i, arg in enumerate(e.args):
                 arg = repr(arg)
-                if len(arg) <= 60:
+                if len(arg) <= 35:
                     short_args.append(arg)
                 else:
-                    full_msg += f"[bold][green]{arg_i:>3}: [darkgray]{arg}\n"
+                    full_msg += f"[bold][green]{arg_i:>3}:[0] [darkgray]{arg}\n"
 
             if i == 0:
                 full_msg += ERROR_DECORATOR + prefix
             else:
-                full_msg += " " * (len(ERROR_DECORATOR) + len(prefix))
+                full_msg += "[white]--- " + e.__class__.__name__
 
             if func_name or file_name or line_number:
                 full_msg += "[darkgray]("
@@ -375,7 +389,7 @@ class PrintableError(Exception):
             if short_args:
                 full_msg += f": [darkgray]{', '.join(short_args)}"
             if i > 0:
-                full_msg += "\n"
+                full_msg += "\n\n"
 
         if not block:
             color_print(full_msg)
