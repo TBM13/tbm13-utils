@@ -2,11 +2,10 @@ import copy
 import math
 import os
 import re
-import traceback
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Container, Sequence
 from datetime import date
-from typing import Any, TextIO, final, override
+from typing import Any, Literal, TextIO, final, overload, override
 
 import prompt_toolkit.shortcuts
 from prompt_toolkit import ANSI, PromptSession, print_formatted_text
@@ -24,6 +23,7 @@ __all__ = [
     "IntValidator",
     "ListValidator",
     "PathValidator",
+    "PrintableError",
     "RangeValidator",
     "SelectionValidator",
     "StringValidator",
@@ -35,7 +35,6 @@ __all__ = [
     "color_print",
     "debug",
     "error",
-    "exception",
     "format_text",
     "get_terminal_columns",
     "get_terminal_rows",
@@ -293,6 +292,101 @@ def _color_input(
 ##########################################################
 # Printing
 ##########################################################
+class PrintableError(Exception):
+    """An exception that can be printed to the console in a user-friendly way."""
+
+    def __init__(self, message: str, *args: Any):
+        """
+        :param message: The error message to be printed.
+        :param args: Additional arguments to be printed alongside the message.
+                     They should contain anything needed to help debug the error,
+                     such as variable values.
+        """
+        super().__init__(message, *args)
+        self.message = message
+        self.args = args
+
+    @overload
+    def print(self, prefix: str = "\nAbort", block: Literal[False] = False) -> None: ...
+    @overload
+    def print(
+        self,
+        prefix: str = "\nAbort",
+        block: Literal[True] = True,
+        erase_when_done: bool = False,
+    ) -> None: ...
+    def print(
+        self,
+        prefix: str = "\nAbort",
+        block: bool = False,
+        erase_when_done: bool = False,
+    ):
+        if prefix and (prefix[-1].isalnum() or prefix[-1] in ")]"):
+            prefix += ": "
+
+        exceptions: list[PrintableError] = [self]
+        while isinstance(exceptions[-1].__cause__, PrintableError):
+            exceptions.append(exceptions[-1].__cause__)
+
+        # If the prefix has newlines, they need to be printed first
+        original_prefix = prefix
+        prefix = prefix.lstrip("\n")
+        full_msg = "\n" * (len(original_prefix) - len(prefix))
+
+        for i, e in enumerate(reversed(exceptions)):
+            # Find the place in the code where the exception was raised
+            tb = e.__traceback__
+            while tb and tb.tb_next:
+                tb = tb.tb_next
+
+            if tb is not None:
+                file_name = tb.tb_frame.f_code.co_filename
+                func_name = tb.tb_frame.f_code.co_name
+                line_number = tb.tb_lineno
+            else:
+                file_name = ""
+                func_name = ""
+                line_number = None
+
+            short_args: list[str] = []
+            for arg_i, arg in enumerate(e.args):
+                arg = repr(arg)
+                if len(arg) <= 60:
+                    short_args.append(arg)
+                else:
+                    full_msg += f"[bold][green]{arg_i:>3}: [darkgray]{arg}\n"
+
+            if i == 0:
+                full_msg += ERROR_DECORATOR + prefix
+            else:
+                full_msg += " " * (len(ERROR_DECORATOR) + len(prefix))
+
+            if func_name or file_name or line_number:
+                full_msg += "[darkgray]("
+                if func_name:
+                    full_msg += f"{func_name}@"
+                full_msg += file_name or "<unknown>"
+                if line_number is not None:
+                    full_msg += f":{line_number}"
+                full_msg += ")[red]: "
+
+            full_msg += e.message
+
+            if short_args:
+                full_msg += f": [darkgray]{', '.join(short_args)}"
+            if i > 0:
+                full_msg += "\n"
+
+        if not block:
+            color_print(full_msg)
+        else:
+            color_input(
+                full_msg,
+                postfix="[0] [darkgray][bold][Enter][0]",
+                erase_when_done=erase_when_done,
+            )
+
+
 def info(*values: Any, block: bool = False):
     if not block:
         color_print(*values, prefix=INFO_DECORATOR)
@@ -333,57 +427,6 @@ def error(*values: Any, block: bool = False):
         color_print(*values, prefix=ERROR_DECORATOR)
     else:
         color_input(*values, prefix=ERROR_DECORATOR, postfix="[0] [darkgray][Enter][0]")
-
-
-def exception(ex: Exception, message: str = "Abort", block: bool = True) -> int:
-    """Prints the exception's args and the
-    file, method and line where it was raised.
-
-    Returns the number of printed lines.
-    """
-    print()
-    printed_lines = 1
-
-    tb = traceback.extract_tb(ex.__traceback__)
-    tb = tb[-1] if len(tb) > 0 else None
-    args = ex.args
-    msg = ex.__class__.__name__
-    details = tb.line or "" if tb is not None else ""
-    if len(ex.args) == 1:
-        args = ex.args[0]
-
-    if isinstance(args, tuple):
-        if len(args) == 0:  # type: ignore
-            if not isinstance(ex, AssertionError):
-                details = ""
-        elif isinstance(args[0], str):
-            msg = args[0]
-            details = ",".join(repr(arg) for arg in args[1:])  # type: ignore
-        else:
-            details = ",".join(repr(arg) for arg in args)  # type: ignore
-    elif isinstance(args, str):
-        if len(args) > 0:
-            msg = args
-            details = ""
-    else:
-        details = repr(args)
-
-    if len(details) > 0:
-        if len(details) <= 60:
-            msg += f": [darkgray]{details}"
-        else:
-            debug(repr(details))
-            printed_lines += 1
-
-    if tb is not None:
-        filename = os.path.basename(tb.filename)
-        msg = f"{message}[darkgray]({tb.name}@{filename}:{tb.lineno})[red]: {msg}"
-    else:
-        msg = f"{message}: {msg}"
-    error(msg, block=block)
-
-    printed_lines += 1
-    return printed_lines
 
 
 def print_separator(sep: str, style: str = ""):

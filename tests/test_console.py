@@ -13,6 +13,7 @@ from tbm13_utils.console import (
     IntValidator,
     ListValidator,
     PathValidator,
+    PrintableError,
     RangeValidator,
     SelectionValidator,
     StringValidator,
@@ -20,7 +21,6 @@ from tbm13_utils.console import (
     ask,
     color_input,
     color_print,
-    exception,
     format_text,
     get_selection_from_table,
     print_dict,
@@ -87,11 +87,13 @@ def test_color_input(pt_input: PipeInput):
     assert color_input("asd: ", default="def", default_editable=True) == "def"
 
 
-def test_exception():
-    exception(ValueError("test error"), block=False)
-    exception(ValueError("test error", "arg2", 6), block=False)
-    exception(Exception(("test error", "arg2")), block=False)
-    exception(ValueError(4), block=False)
+##########################################################
+# Printing
+##########################################################
+def test_printable_error():
+    PrintableError("test").print()
+    PrintableError("test", 4, 5, True, "asd").print()
+    PrintableError("test", "a" * 500).print()
 
 
 def test_print_separator():
