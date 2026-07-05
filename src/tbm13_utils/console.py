@@ -736,22 +736,42 @@ class ListValidator[T](BaseValidator[list[T]]):
 
 
 class SelectionValidator(BaseValidator[int]):
+    """A validator that prints a list of options and asks the user to select one of them
+    by its index.
+
+    Each argument passed to the `input()` method will be considered an option.
+    Its return value will be the index of the selected option, starting from 0.
+    """
+
     def __init__(
         self,
         prompt: str = "\n[darkgray]Select an option",
         fmt: str = "\n{index}) {item}",
+        start_index: int = 1,
     ):
+        """
+        :param prompt: The prompt shown to the user when asking for a selection.
+        :param fmt: The format string used to display each option.
+                    It can contain `{index}` and `{item}` placeholders.
+        :param start_index: The index the first option will be displayed with.
+                            This does not affect the index returned by the validator,
+                            which will always be 0-based.
+        """
         super().__init__()
 
         self.prompt = "\n" + prompt
         self.fmt = fmt
+        self._start_index = start_index
         self._item_count = 0
 
     @override
     def _prepare_input_prompt(self, *args: Any):
         self._item_count = len(args)
         args = (
-            *(self.fmt.format(index=i + 1, item=arg) for i, arg in enumerate(args)),
+            *(
+                self.fmt.format(index=i + self._start_index, item=arg)
+                for i, arg in enumerate(args)
+            ),
             self.prompt,
         )
         return super()._prepare_input_prompt(*args)
@@ -765,15 +785,17 @@ class SelectionValidator(BaseValidator[int]):
                 message="Invalid option", cursor_position=len(text)
             ) from ex
 
-        if value < 1 or value > self._item_count:
+        min = self._start_index
+        max = self._item_count + self._start_index - 1
+        if value < min or value > max:
             raise ValidationError(
-                message=f"The option must be between 1 and {self._item_count}",
+                message=f"The option must be between {min} and {max}",
                 cursor_position=len(text),
             )
 
     @override
     def _parse(self, user_input: str) -> int:
-        return int(user_input) - 1
+        return int(user_input) - self._start_index
 
 
 class TableSelectionValidator(BaseValidator[int]):

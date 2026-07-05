@@ -389,12 +389,31 @@ def test_selection_validator(pt_input: PipeInput):
     pt_input.send_text(f"abc\n{CLEAR_INPUT}2\n")
     assert SelectionValidator().input(*options) == 1
 
-    # Out-of-bounds option (too low), followed by a valid option
-    pt_input.send_text(f"0\n{CLEAR_INPUT}1\n")
+    # Out-of-bounds options (too low), then valid option
+    pt_input.send_text(f"0\n{CLEAR_INPUT}-5\n{CLEAR_INPUT}1\n")
     assert SelectionValidator().input(*options) == 0
-    # Out-of-bounds option (too high), followed by a valid option
-    pt_input.send_text(f"4\n{CLEAR_INPUT}3\n")
+    # Out-of-bounds options (too high), then valid option
+    pt_input.send_text(f"4\n{CLEAR_INPUT}100\n{CLEAR_INPUT}3\n")
     assert SelectionValidator().input(*options) == 2
+
+    #####################
+    # Custom start index
+    #####################
+    pt_input.send_text("0\n")
+    assert SelectionValidator(start_index=0).input(*options) == 0
+    pt_input.send_text("2\n")
+    assert SelectionValidator(start_index=0).input(*options) == 2
+    # OOB option (too low), OOB option (too high), then valid option
+    pt_input.send_text(f"-1\n{CLEAR_INPUT}3\n{CLEAR_INPUT}1\n")
+    assert SelectionValidator(start_index=0).input(*options) == 1
+
+    pt_input.send_text("-2\n")
+    assert SelectionValidator(start_index=-2).input(*options) == 0
+    pt_input.send_text("0\n")
+    assert SelectionValidator(start_index=-2).input(*options) == 2
+    # OOB option (too low), OOB option (too high), then valid option
+    pt_input.send_text(f"-3\n{CLEAR_INPUT}1\n{CLEAR_INPUT}-1\n")
+    assert SelectionValidator(start_index=-2).input(*options) == 1
 
 
 def test_list_validator(pt_input: PipeInput):
